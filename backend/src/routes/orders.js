@@ -22,28 +22,35 @@ router.post('/', async (req, res, next) => {
       order_items,
       scheduled_delivery_time,
       order_type,
+      tip,
     } = req.body;
 
-    // Calculate totals (stub)
+    const zoneResult = await query('SELECT base_delivery_fee FROM zones WHERE id = $1', [zone_id]);
+    if (zoneResult.rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid zone_id' });
+    }
+
+    // Calculate totals
     const subtotal = order_items.reduce((sum, item) => sum + item.price_per_unit * item.quantity, 0);
-    const delivery_fee = 5.00; // Zone-based; calculate later
+    const delivery_fee = Number(zoneResult.rows[0].base_delivery_fee);
     const service_fee = subtotal * 0.03;
     const tax = subtotal * 0.05;
-    const total = subtotal + delivery_fee + service_fee + tax;
+    const tip_amount = tip || 0;
+    const total = subtotal + delivery_fee + service_fee + tax + tip_amount;
 
     // Create order
     const orderResult = await query(
       `INSERT INTO orders (
         customer_id, merchant_id, zone_id, pin_latitude, pin_longitude,
         delivery_notes, gate_code, villa_building_name, villa_unit, landmark,
-        contact_phone, substitution_policy, subtotal, delivery_fee, service_fee, tax, total,
+        contact_phone, substitution_policy, subtotal, delivery_fee, service_fee, tax, tip, total,
         order_type, scheduled_delivery_time, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, 'pending')
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, 'pending')
       RETURNING *`,
       [
         customer_id, merchant_id, zone_id, pin_latitude, pin_longitude,
         delivery_notes, gate_code, villa_building_name, villa_unit, landmark,
-        contact_phone, substitution_policy, subtotal, delivery_fee, service_fee, tax, total,
+        contact_phone, substitution_policy, subtotal, delivery_fee, service_fee, tax, tip_amount, total,
         order_type, scheduled_delivery_time,
       ]
     );

@@ -5,6 +5,11 @@ dotenv.config();
 
 const { Pool } = pg;
 
+// Stateside Deliveries operates in a single timezone (AST). "timestamp without time zone"
+// columns should round-trip as plain wall-clock strings, not get silently reinterpreted
+// through whatever timezone the Node process or a client happens to be running in.
+pg.types.setTypeParser(1114, (value) => value);
+
 export const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
   port: process.env.DB_PORT || 5432,

@@ -65,4 +65,110 @@ router.patch('/:id/cooler-kit', async (req, res, next) => {
   }
 });
 
+// GET orders available to be offered to this driver
+router.get('/:id/available-orders', async (req, res, next) => {
+  try {
+    const driverResult = await query('SELECT cooler_kit_status FROM drivers WHERE id = $1', [req.params.id]);
+    if (driverResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Driver not found' });
+    }
+    const hasCoolerKit = driverResult.rows[0].cooler_kit_status;
+
+    const result = await query(
+      `SELECT o.id, o.status, o.total, o.delivery_fee, o.pin_latitude, o.pin_longitude, o.delivery_notes,
+              o.landmark, o.villa_building_name, o.villa_unit, o.order_type, o.scheduled_delivery_time,
+              o.created_at, m.business_name AS merchant_name, m.address AS merchant_address,
+              u.full_name AS customer_name,
+              EXISTS (
+                SELECT 1 FROM order_items oi JOIN menu_items mi ON oi.menu_item_id = mi.id
+                WHERE oi.order_id = o.id AND mi.is_cold_item = true
+              ) AS has_cold_items
+       FROM orders o
+       JOIN merchants m ON o.merchant_id = m.id
+       JOIN customers c ON o.customer_id = c.id
+       JOIN users u ON c.user_id = u.id
+       WHERE o.driver_id IS NULL AND o.status NOT IN ('delivered', 'cancelled', 'refunded')
+       ORDER BY has_cold_items DESC, o.created_at ASC`
+    );
+
+    const offers = hasCoolerKit ? result.rows : result.rows.filter((o) => !o.has_cold_items);
+    res.json(offers);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET this driver's current active delivery, if any
+router.get('/:id/active-order', async (req, res, next) => {
+  try {
+    const result = await query(
+      `SELECT o.*, m.business_name AS merchant_name, m.address AS merchant_address,
+              u.full_name AS customer_name,
+              EXISTS (
+                SELECT 1 FROM order_items oi JOIN menu_items mi ON oi.menu_item_id = mi.id
+                WHERE oi.order_id = o.id AND mi.is_cold_item = true
+              ) AS has_cold_items
+       FROM orders o
+       JOIN merchants m ON o.merchant_id = m.id
+       JOIN customers c ON o.customer_id = c.id
+       JOIN users u ON c.user_id = u.id
+       WHERE o.driver_id = $1 AND o.status NOT IN ('delivered', 'cancelled', 'refunded')
+       ORDER BY o.created_at DESC
+       LIMIT 1`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.json(null);
+    }
+    const itemsResult = await query('SELECT * FROM order_items WHERE order_id = $1', [result.rows[0].id]);
+    res.json({ ...result.rows[0], items: itemsResult.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET this driver's completed delivery history + earnings
+router.get('/:id/deliveries', async (req, res, next) => {
+  try {
+    const deliveries = await query(
+      `SELECT o.id, o.total, o.delivery_fee, o.tip, o.delivered_at, m.business_name AS merchant_name
+       FROM orders o
+       JOIN merchants m ON o.merchant_id = m.id
+       WHERE o.driver_id = $1 AND o.status = 'delivered'
+       ORDER BY o.delivered_at DESC`,
+      [req.params.id]
+    );
+    const earnings = deliveries.rows.reduce(
+      (sum, d) => sum + Number(d.delivery_fee) + Number(d.tip),
+      0
+    );
+    res.json({ deliveries: deliveries.rows, earnings: Math.round(earnings * 100) / 100 });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST driver accepts an offered order
+router.post('/:id/accept-order/:orderId', async (req, res, next) => {
+  try {
+    const result = await query(
+      `UPDATE orders SET driver_id = $1, updated_at = NOW()
+       WHERE id = $2 AND driver_id IS NULL
+       RETURNING *`,
+      [req.params.id, req.params.orderId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(409).json({ error: 'Order is no longer available' });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST driver declines an offered order (no persistence yet, ack only)
+router.post('/:id/decline-order/:orderId', async (req, res, next) => {
+  res.json({ declined: true, order_id: Number(req.params.orderId) });
+});
+
 export default router;

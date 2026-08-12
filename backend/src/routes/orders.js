@@ -96,10 +96,57 @@ router.patch('/:id/status', async (req, res, next) => {
   try {
     const { status } = req.body;
     const result = await query(
-      `UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+      `UPDATE orders SET status = $1::varchar, updated_at = NOW(),
+              delivered_at = CASE WHEN $1::varchar = 'delivered' THEN NOW() ELSE delivered_at END
+       WHERE id = $2 RETURNING *`,
       [status, req.params.id]
     );
     res.json(result.rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST manually assign a driver to an order (dispatcher override, bypasses offer/accept flow)
+router.post('/:id/assign-driver/:driverId', async (req, res, next) => {
+  try {
+    const result = await query(
+      `UPDATE orders SET driver_id = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+      [req.params.driverId, req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST record delivery proof and mark the order delivered
+router.post('/:id/delivery-proof', async (req, res, next) => {
+  try {
+    const { proof_type, proof_url, latitude, longitude, driver_id } = req.body;
+
+    await query(
+      `INSERT INTO delivery_proofs (order_id, proof_type, proof_url, latitude, longitude)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [req.params.id, proof_type, proof_url || null, latitude || null, longitude || null]
+    );
+
+    const orderResult = await query(
+      `UPDATE orders SET status = 'delivered', delivered_at = NOW(), updated_at = NOW() WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+
+    if (driver_id) {
+      await query(
+        `UPDATE drivers SET total_deliveries = total_deliveries + 1, updated_at = NOW() WHERE id = $1`,
+        [driver_id]
+      );
+    }
+
+    res.status(201).json(orderResult.rows[0]);
   } catch (err) {
     next(err);
   }

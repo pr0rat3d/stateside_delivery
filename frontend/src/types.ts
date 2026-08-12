@@ -88,5 +88,32 @@ export interface Order {
   tip: string;
   total: string;
   created_at: string;
+  delivered_at?: string | null;
   items?: { id: number; name: string; quantity: number; price_per_unit: string }[];
+}
+
+export interface Driver {
+  id: number;
+  full_name: string;
+  phone: string | null;
+  availability_status: 'offline' | 'online' | 'on_delivery' | 'on_break';
+  cooler_kit_status: boolean;
+  total_deliveries: number;
+  avg_rating: string | null;
+}
+
+export interface DriverOrder extends Order {
+  merchant_name: string;
+  merchant_address: string | null;
+  customer_name: string;
+  has_cold_items: boolean;
+}
+
+export interface Delivery {
+  id: number;
+  total: string;
+  delivery_fee: string;
+  tip: string;
+  delivered_at: string;
+  merchant_name: string;
 }

@@ -1,8 +1,9 @@
-import { BrowserRouter, Outlet, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { CartProvider } from './context/CartContext';
 import Navbar from './components/Navbar';
 import DriverNavbar from './components/DriverNavbar';
 import MerchantNavbar from './components/MerchantNavbar';
+import AdminNavbar from './components/AdminNavbar';
 import MerchantList from './pages/MerchantList';
 import MerchantDetail from './pages/MerchantDetail';
 import Checkout from './pages/Checkout';
@@ -16,6 +17,12 @@ import MerchantDashboard from './pages/merchant/MerchantDashboard';
 import MerchantOrderDetail from './pages/merchant/MerchantOrderDetail';
 import MerchantMenu from './pages/merchant/MerchantMenu';
 import MerchantHistory from './pages/merchant/MerchantHistory';
+import AdminOrders from './pages/admin/AdminOrders';
+import AdminZones from './pages/admin/AdminZones';
+import AdminMerchants from './pages/admin/AdminMerchants';
+import AdminDrivers from './pages/admin/AdminDrivers';
+import AdminReports from './pages/admin/AdminReports';
+import AdminSupport from './pages/admin/AdminSupport';
 
 function CustomerLayout() {
   return (
@@ -44,6 +51,15 @@ function MerchantLayout() {
   );
 }
 
+function AdminLayout() {
+  return (
+    <>
+      <AdminNavbar />
+      <Outlet />
+    </>
+  );
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -66,6 +82,15 @@ export default function App() {
           <Route path="/merchant/orders/:id" element={<MerchantOrderDetail />} />
           <Route path="/merchant/menu" element={<MerchantMenu />} />
           <Route path="/merchant/history" element={<MerchantHistory />} />
+        </Route>
+        <Route element={<AdminLayout />}>
+          <Route path="/admin" element={<Navigate to="/admin/orders" replace />} />
+          <Route path="/admin/orders" element={<AdminOrders />} />
+          <Route path="/admin/zones" element={<AdminZones />} />
+          <Route path="/admin/merchants" element={<AdminMerchants />} />
+          <Route path="/admin/drivers" element={<AdminDrivers />} />
+          <Route path="/admin/reports" element={<AdminReports />} />
+          <Route path="/admin/support" element={<AdminSupport />} />
         </Route>
       </Routes>
     </BrowserRouter>

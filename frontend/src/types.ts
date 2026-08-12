@@ -32,6 +32,7 @@ export interface Zone {
   service_level: 'standard' | 'priority' | 'scheduled_only';
   max_delivery_time_minutes: number;
   min_order_value: string;
+  is_active?: boolean;
 }
 
 export interface CartItem {
@@ -169,4 +170,62 @@ export interface MerchantHistory {
     commission_percent: number;
     net_revenue: number;
   };
+}
+
+export interface AdminOrder {
+  id: number;
+  status: string;
+  total: string;
+  estimated_ready_time: string | null;
+  scheduled_delivery_time: string | null;
+  order_type: string;
+  customer_name: string;
+  merchant_name: string;
+  driver_id: number | null;
+  driver_name: string | null;
+  pin_latitude: string;
+  pin_longitude: string;
+  created_at: string;
+  has_cold_items: boolean;
+}
+
+export interface AdminDriver {
+  id: number;
+  full_name: string;
+  phone: string | null;
+  email: string;
+  availability_status: Driver['availability_status'];
+  cooler_kit_status: boolean;
+  is_active: boolean;
+  license_verified: boolean;
+  insurance_verified: boolean;
+  total_deliveries: number;
+  avg_rating: string | null;
+  lifetime_earnings: string;
+}
+
+export interface AdminMerchant extends Merchant {
+  delivered_orders: string;
+}
+
+export interface Report {
+  orders_per_day: { day: string; order_count: string }[];
+  delivery_time_by_cold_chain: { has_cold_items: boolean; avg_minutes: string | null; delivered_count: string }[];
+  repeat_customers: number;
+  total_customers: number;
+  driver_utilization: { id: number; full_name: string; availability_status: string; deliveries_last_14_days: string }[];
+}
+
+export interface SupportTicket {
+  id: number;
+  order_id: number | null;
+  customer_id: number;
+  issue_type: string;
+  description: string;
+  resolution: string | null;
+  status: 'open' | 'in_progress' | 'resolved' | 'closed';
+  created_at: string;
+  customer_name: string;
+  order_total: string | null;
+  merchant_name: string | null;
 }

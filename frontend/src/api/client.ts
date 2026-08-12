@@ -11,6 +11,11 @@ import type {
   MenuItem,
   MerchantOrderFeed,
   MerchantHistory,
+  AdminOrder,
+  AdminDriver,
+  AdminMerchant,
+  Report,
+  SupportTicket,
 } from '../types';
 
 const baseURL = `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api`;
@@ -145,5 +150,89 @@ export async function updateMenuItem(
 
 export async function getMerchantHistory(merchantId: number): Promise<MerchantHistory> {
   const res = await client.get(`/merchants/${merchantId}/history`);
+  return res.data;
+}
+
+export async function assignDriver(orderId: number, driverId: number): Promise<Order> {
+  const res = await client.post(`/orders/${orderId}/assign-driver/${driverId}`);
+  return res.data;
+}
+
+export async function getAdminLiveOrders(): Promise<AdminOrder[]> {
+  const res = await client.get('/admin/orders');
+  return res.data;
+}
+
+export async function issueRefund(orderId: number, refund_reason: string): Promise<Order> {
+  const res = await client.post(`/admin/refunds/${orderId}`, { refund_reason });
+  return res.data;
+}
+
+export async function getAdminDrivers(): Promise<AdminDriver[]> {
+  const res = await client.get('/admin/drivers');
+  return res.data;
+}
+
+export async function setDriverActive(driverId: number, is_active: boolean): Promise<AdminDriver> {
+  const res = await client.patch(`/admin/drivers/${driverId}/status`, { is_active });
+  return res.data;
+}
+
+export async function getAdminMerchants(): Promise<AdminMerchant[]> {
+  const res = await client.get('/admin/merchants');
+  return res.data;
+}
+
+export async function setMerchantActive(merchantId: number, is_active: boolean): Promise<AdminMerchant> {
+  const res = await client.patch(`/admin/merchants/${merchantId}/status`, { is_active });
+  return res.data;
+}
+
+export async function getAdminZones(): Promise<Zone[]> {
+  const res = await client.get('/admin/zones');
+  return res.data;
+}
+
+export async function createZone(payload: {
+  name: string;
+  base_delivery_fee: number;
+  service_level: string;
+  min_order_value: number;
+  max_delivery_time_minutes: number;
+}): Promise<Zone> {
+  const res = await client.post('/zones', payload);
+  return res.data;
+}
+
+export async function updateZone(zoneId: number, payload: Partial<Zone>): Promise<Zone> {
+  const res = await client.patch(`/zones/${zoneId}`, payload);
+  return res.data;
+}
+
+export async function getReports(): Promise<Report> {
+  const res = await client.get('/admin/reports');
+  return res.data;
+}
+
+export async function getSupportTickets(status?: string): Promise<SupportTicket[]> {
+  const res = await client.get('/support-tickets', { params: status ? { status } : {} });
+  return res.data;
+}
+
+export async function updateSupportTicket(
+  id: number,
+  payload: { status?: SupportTicket['status']; resolution?: string }
+): Promise<SupportTicket> {
+  const res = await client.patch(`/support-tickets/${id}`, payload);
+  return res.data;
+}
+
+export async function createSupportTicket(payload: {
+  order_id: number;
+  customer_id: number;
+  issue_type: string;
+  description: string;
+}): Promise<SupportTicket> {
+  const res = await client.post('/support-tickets', payload);
   return res.data;
 }

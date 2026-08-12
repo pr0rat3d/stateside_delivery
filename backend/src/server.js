@@ -15,6 +15,7 @@ import orderRoutes from './routes/orders.js';
 import zoneRoutes from './routes/zones.js';
 import adminRoutes from './routes/admin.js';
 import paymentRoutes from './routes/payments.js';
+import supportRoutes from './routes/support.js';
 
 dotenv.config();
 
@@ -45,6 +46,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/zones', zoneRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/support-tickets', supportRoutes);
 
 // 404 handler
 app.use((req, res) => {

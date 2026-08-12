@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { getOrder, respondToSubstitution } from '../api/client';
+import { createSupportTicket, getOrder, respondToSubstitution } from '../api/client';
 import { formatNaiveTimestamp } from '../utils/formatDate';
 import type { Order } from '../types';
 
@@ -22,6 +22,9 @@ export default function OrderConfirmation() {
   const [order, setOrder] = useState<Order | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyItemId, setBusyItemId] = useState<number | null>(null);
+  const [showIssueForm, setShowIssueForm] = useState(false);
+  const [issueText, setIssueText] = useState('');
+  const [issueSubmitted, setIssueSubmitted] = useState(false);
 
   const refresh = useCallback(() => {
     if (!id) return;
@@ -50,6 +53,18 @@ export default function OrderConfirmation() {
     } finally {
       setBusyItemId(null);
     }
+  }
+
+  async function handleReportIssue() {
+    if (!order || !issueText.trim()) return;
+    await createSupportTicket({
+      order_id: order.id,
+      customer_id: order.customer_id,
+      issue_type: 'other',
+      description: issueText.trim(),
+    });
+    setIssueSubmitted(true);
+    setShowIssueForm(false);
   }
 
   return (
@@ -116,9 +131,40 @@ export default function OrderConfirmation() {
         </p>
       )}
 
-      <Link to="/" className="inline-block rounded-full bg-teal-600 text-white px-6 py-2 font-medium">
+      <Link to="/" className="inline-block rounded-full bg-teal-600 text-white px-6 py-2 font-medium mb-6">
         Order something else
       </Link>
+
+      <div className="text-left">
+        {issueSubmitted && (
+          <p className="text-sm text-teal-700 bg-teal-50 rounded-lg p-3">
+            Thanks — we've logged your issue and support will follow up.
+          </p>
+        )}
+        {!issueSubmitted && !showIssueForm && (
+          <button onClick={() => setShowIssueForm(true)} className="text-sm text-gray-500 underline">
+            Report an issue with this order
+          </button>
+        )}
+        {!issueSubmitted && showIssueForm && (
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <textarea
+              placeholder="What went wrong?"
+              value={issueText}
+              onChange={(e) => setIssueText(e.target.value)}
+              rows={3}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm mb-2"
+            />
+            <button
+              onClick={handleReportIssue}
+              disabled={!issueText.trim()}
+              className="rounded-full bg-gray-900 text-white text-sm font-medium px-4 py-2 disabled:opacity-50"
+            >
+              Submit
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

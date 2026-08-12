@@ -1,5 +1,17 @@
 import axios from 'axios';
-import type { Merchant, MerchantWithMenu, Zone, Order, OrderPayload, Driver, DriverOrder, Delivery } from '../types';
+import type {
+  Merchant,
+  MerchantWithMenu,
+  Zone,
+  Order,
+  OrderPayload,
+  Driver,
+  DriverOrder,
+  Delivery,
+  MenuItem,
+  MerchantOrderFeed,
+  MerchantHistory,
+} from '../types';
 
 const baseURL = `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api`;
 
@@ -89,5 +101,49 @@ export async function submitDeliveryProof(
   payload: { proof_type: 'photo' | 'signature' | 'gps'; latitude?: number; longitude?: number; driver_id: number }
 ): Promise<Order> {
   const res = await client.post(`/orders/${orderId}/delivery-proof`, payload);
+  return res.data;
+}
+
+export async function getIncomingOrders(merchantId: number): Promise<MerchantOrderFeed> {
+  const res = await client.get(`/merchants/${merchantId}/incoming-orders`);
+  return res.data;
+}
+
+export async function acceptMerchantOrder(orderId: number, estimated_prep_minutes: number): Promise<Order> {
+  const res = await client.patch(`/orders/${orderId}/accept`, { estimated_prep_minutes });
+  return res.data;
+}
+
+export async function rejectMerchantOrder(orderId: number): Promise<Order> {
+  const res = await client.patch(`/orders/${orderId}/reject`);
+  return res.data;
+}
+
+export async function proposeSubstitution(orderId: number, itemId: number, substitution_notes: string) {
+  const res = await client.patch(`/orders/${orderId}/items/${itemId}/substitute`, { substitution_notes });
+  return res.data;
+}
+
+export async function respondToSubstitution(orderId: number, itemId: number, approved: boolean): Promise<Order> {
+  const res = await client.patch(`/orders/${orderId}/items/${itemId}/substitution-response`, { approved });
+  return res.data;
+}
+
+export async function getFullMenu(merchantId: number): Promise<MenuItem[]> {
+  const res = await client.get(`/merchants/${merchantId}/menu`);
+  return res.data;
+}
+
+export async function updateMenuItem(
+  merchantId: number,
+  itemId: number,
+  payload: { is_available?: boolean; price?: number }
+): Promise<MenuItem> {
+  const res = await client.patch(`/merchants/${merchantId}/menu/${itemId}`, payload);
+  return res.data;
+}
+
+export async function getMerchantHistory(merchantId: number): Promise<MerchantHistory> {
+  const res = await client.get(`/merchants/${merchantId}/history`);
   return res.data;
 }

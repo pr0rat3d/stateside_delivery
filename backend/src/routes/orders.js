@@ -75,7 +75,17 @@ router.post('/', async (req, res, next) => {
 // GET order by ID
 router.get('/:id', async (req, res, next) => {
   try {
-    const orderResult = await query('SELECT * FROM orders WHERE id = $1', [req.params.id]);
+    const orderResult = await query(
+      `SELECT o.*, u.full_name AS customer_name, m.business_name AS merchant_name, du.full_name AS driver_name
+       FROM orders o
+       JOIN customers c ON o.customer_id = c.id
+       JOIN users u ON c.user_id = u.id
+       JOIN merchants m ON o.merchant_id = m.id
+       LEFT JOIN drivers d ON o.driver_id = d.id
+       LEFT JOIN users du ON d.user_id = du.id
+       WHERE o.id = $1`,
+      [req.params.id]
+    );
     if (orderResult.rows.length === 0) {
       return res.status(404).json({ error: 'Order not found' });
     }
@@ -102,6 +112,93 @@ router.patch('/:id/status', async (req, res, next) => {
       [status, req.params.id]
     );
     res.json(result.rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH merchant accepts the order with a prep time estimate
+router.patch('/:id/accept', async (req, res, next) => {
+  try {
+    const { estimated_prep_minutes } = req.body;
+    const minutes = Number(estimated_prep_minutes) || 15;
+    const result = await query(
+      `UPDATE orders SET status = 'accepted', updated_at = NOW(),
+              estimated_ready_time = NOW() + ($1 || ' minutes')::interval
+       WHERE id = $2 AND status = 'pending' RETURNING *`,
+      [minutes, req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(409).json({ error: 'Order is not awaiting acceptance' });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH merchant rejects the order
+router.patch('/:id/reject', async (req, res, next) => {
+  try {
+    const result = await query(
+      `UPDATE orders SET status = 'cancelled', updated_at = NOW()
+       WHERE id = $1 AND status = 'pending' RETURNING *`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(409).json({ error: 'Order is not awaiting acceptance' });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH merchant proposes a substitution for an out-of-stock item (text-based note; no photo storage in MVP)
+router.patch('/:id/items/:itemId/substitute', async (req, res, next) => {
+  try {
+    const { substitution_notes } = req.body;
+    const result = await query(
+      `UPDATE order_items SET substitution_status = 'awaiting_approval', substitution_notes = $1
+       WHERE id = $2 AND order_id = $3 RETURNING *`,
+      [substitution_notes, req.params.itemId, req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Order item not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH customer responds to a proposed substitution
+router.patch('/:id/items/:itemId/substitution-response', async (req, res, next) => {
+  try {
+    const { approved } = req.body;
+    const itemResult = await query(
+      `SELECT * FROM order_items WHERE id = $1 AND order_id = $2 AND substitution_status = 'awaiting_approval'`,
+      [req.params.itemId, req.params.id]
+    );
+    if (itemResult.rows.length === 0) {
+      return res.status(409).json({ error: 'No substitution is awaiting approval for this item' });
+    }
+    const item = itemResult.rows[0];
+
+    if (approved) {
+      await query(`UPDATE order_items SET substitution_status = 'approved' WHERE id = $1`, [item.id]);
+    } else {
+      await query(`UPDATE order_items SET substitution_status = 'refunded' WHERE id = $1`, [item.id]);
+      const refundAmount = Number(item.price_per_unit) * item.quantity;
+      await query(
+        `UPDATE orders SET subtotal = subtotal - $1, total = total - $1, updated_at = NOW() WHERE id = $2`,
+        [refundAmount, req.params.id]
+      );
+    }
+
+    const orderResult = await query('SELECT * FROM orders WHERE id = $1', [req.params.id]);
+    const itemsResult = await query('SELECT * FROM order_items WHERE order_id = $1', [req.params.id]);
+    res.json({ ...orderResult.rows[0], items: itemsResult.rows });
   } catch (err) {
     next(err);
   }

@@ -63,6 +63,17 @@ export interface OrderPayload {
   order_items: { menu_item_id: number; name: string; quantity: number; price_per_unit: number }[];
 }
 
+export interface OrderItem {
+  id: number;
+  order_id: number;
+  menu_item_id: number;
+  name: string;
+  quantity: number;
+  price_per_unit: string;
+  substitution_status: 'none' | 'awaiting_approval' | 'approved' | 'refunded';
+  substitution_notes: string | null;
+}
+
 export interface Order {
   id: number;
   customer_id: number;
@@ -72,6 +83,7 @@ export interface Order {
   status: string;
   order_type: string;
   scheduled_delivery_time: string | null;
+  estimated_ready_time?: string | null;
   pin_latitude: string;
   pin_longitude: string;
   delivery_notes: string | null;
@@ -89,7 +101,10 @@ export interface Order {
   total: string;
   created_at: string;
   delivered_at?: string | null;
-  items?: { id: number; name: string; quantity: number; price_per_unit: string }[];
+  items?: OrderItem[];
+  customer_name?: string;
+  merchant_name?: string;
+  driver_name?: string | null;
 }
 
 export interface Driver {
@@ -116,4 +131,42 @@ export interface Delivery {
   tip: string;
   delivered_at: string;
   merchant_name: string;
+}
+
+export interface MerchantOrderSummary {
+  id: number;
+  status: string;
+  total: string;
+  order_type: string;
+  scheduled_delivery_time: string | null;
+  estimated_ready_time: string | null;
+  driver_id: number | null;
+  driver_name: string | null;
+  customer_name: string;
+  created_at: string;
+  has_pending_substitution: boolean;
+}
+
+export interface MerchantOrderFeed {
+  incoming: MerchantOrderSummary[];
+  in_progress: MerchantOrderSummary[];
+}
+
+export interface MerchantHistoryOrder {
+  id: number;
+  status: string;
+  subtotal: string;
+  total: string;
+  delivered_at: string | null;
+  customer_name: string;
+}
+
+export interface MerchantHistory {
+  orders: MerchantHistoryOrder[];
+  summary: {
+    delivered_count: number;
+    gross_subtotal: number;
+    commission_percent: number;
+    net_revenue: number;
+  };
 }

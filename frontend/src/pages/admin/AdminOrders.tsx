@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { assignDriver, getAdminDrivers, getAdminLiveOrders, issueRefund } from '../../api/client';
 import LiveOrdersMap from '../../components/LiveOrdersMap';
+import GoogleLiveOrdersMap from '../../components/GoogleLiveOrdersMap';
 import { formatNaiveTimestamp } from '../../utils/formatDate';
+import { GOOGLE_MAPS_CONFIGURED } from '../../config';
 import type { AdminDriver, AdminOrder } from '../../types';
 
 const POLL_MS = 10000;
@@ -64,7 +66,7 @@ export default function AdminOrders() {
       {error && <p className="text-red-600 mb-4">{error}</p>}
 
       <div className="mb-6">
-        <LiveOrdersMap orders={orders} />
+        {GOOGLE_MAPS_CONFIGURED ? <GoogleLiveOrdersMap orders={orders} /> : <LiveOrdersMap orders={orders} />}
       </div>
 
       <div className="space-y-2">

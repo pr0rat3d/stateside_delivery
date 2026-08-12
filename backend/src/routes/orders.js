@@ -1,10 +1,14 @@
 import express from 'express';
 import { query } from '../config/db.js';
+import { writeLimiter } from '../middleware/rateLimit.js';
+import { validateBody } from '../middleware/validate.js';
+import { createOrderSchema } from '../utils/schemas.js';
+import { sendSMS } from '../utils/sms.js';
 
 const router = express.Router();
 
 // POST create order
-router.post('/', async (req, res, next) => {
+router.post('/', writeLimiter, validateBody(createOrderSchema), async (req, res, next) => {
   try {
     const {
       customer_id,
@@ -25,13 +29,44 @@ router.post('/', async (req, res, next) => {
       tip,
     } = req.body;
 
-    const zoneResult = await query('SELECT base_delivery_fee FROM zones WHERE id = $1', [zone_id]);
+    const zoneResult = await query('SELECT base_delivery_fee FROM zones WHERE id = $1 AND is_active = true', [zone_id]);
     if (zoneResult.rows.length === 0) {
-      return res.status(400).json({ error: 'Invalid zone_id' });
+      return res.status(400).json({ error: 'Invalid or inactive zone_id' });
     }
 
-    // Calculate totals
-    const subtotal = order_items.reduce((sum, item) => sum + item.price_per_unit * item.quantity, 0);
+    const merchantResult = await query('SELECT id FROM merchants WHERE id = $1 AND is_active = true', [merchant_id]);
+    if (merchantResult.rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid or inactive merchant_id' });
+    }
+
+    // Price and validate every item server-side — never trust client-supplied price/name,
+    // since a tampered request could otherwise checkout at an arbitrary price.
+    const menuItemIds = order_items.map((i) => i.menu_item_id);
+    const menuItemsResult = await query(
+      `SELECT id, name, price, is_available FROM menu_items WHERE id = ANY($1::int[]) AND merchant_id = $2`,
+      [menuItemIds, merchant_id]
+    );
+    const menuItemsById = new Map(menuItemsResult.rows.map((row) => [row.id, row]));
+
+    const pricedItems = [];
+    for (const item of order_items) {
+      const menuItem = menuItemsById.get(item.menu_item_id);
+      if (!menuItem) {
+        return res.status(400).json({ error: `Menu item ${item.menu_item_id} does not belong to this merchant` });
+      }
+      if (!menuItem.is_available) {
+        return res.status(409).json({ error: `${menuItem.name} is no longer available` });
+      }
+      pricedItems.push({
+        menu_item_id: menuItem.id,
+        name: menuItem.name,
+        price_per_unit: Number(menuItem.price),
+        quantity: item.quantity,
+      });
+    }
+
+    // Calculate totals from authoritative prices
+    const subtotal = pricedItems.reduce((sum, item) => sum + item.price_per_unit * item.quantity, 0);
     const delivery_fee = Number(zoneResult.rows[0].base_delivery_fee);
     const service_fee = subtotal * 0.03;
     const tax = subtotal * 0.05;
@@ -58,7 +93,7 @@ router.post('/', async (req, res, next) => {
     const order_id = orderResult.rows[0].id;
 
     // Add order items
-    for (const item of order_items) {
+    for (const item of pricedItems) {
       await query(
         `INSERT INTO order_items (order_id, menu_item_id, name, quantity, price_per_unit)
          VALUES ($1, $2, $3, $4, $5)`,
@@ -102,7 +137,7 @@ router.get('/:id', async (req, res, next) => {
 });
 
 // PATCH update order status
-router.patch('/:id/status', async (req, res, next) => {
+router.patch('/:id/status', writeLimiter, async (req, res, next) => {
   try {
     const { status } = req.body;
     const result = await query(
@@ -118,7 +153,7 @@ router.patch('/:id/status', async (req, res, next) => {
 });
 
 // PATCH merchant accepts the order with a prep time estimate
-router.patch('/:id/accept', async (req, res, next) => {
+router.patch('/:id/accept', writeLimiter, async (req, res, next) => {
   try {
     const { estimated_prep_minutes } = req.body;
     const minutes = Number(estimated_prep_minutes) || 15;
@@ -131,14 +166,16 @@ router.patch('/:id/accept', async (req, res, next) => {
     if (result.rows.length === 0) {
       return res.status(409).json({ error: 'Order is not awaiting acceptance' });
     }
-    res.json(result.rows[0]);
+    const order = result.rows[0];
+    sendSMS(order.contact_phone, `Stateside Deliveries: your order #${order.id} was accepted — ready in about ${minutes} minutes.`);
+    res.json(order);
   } catch (err) {
     next(err);
   }
 });
 
 // PATCH merchant rejects the order
-router.patch('/:id/reject', async (req, res, next) => {
+router.patch('/:id/reject', writeLimiter, async (req, res, next) => {
   try {
     const result = await query(
       `UPDATE orders SET status = 'cancelled', updated_at = NOW()
@@ -155,7 +192,7 @@ router.patch('/:id/reject', async (req, res, next) => {
 });
 
 // PATCH merchant proposes a substitution for an out-of-stock item (text-based note; no photo storage in MVP)
-router.patch('/:id/items/:itemId/substitute', async (req, res, next) => {
+router.patch('/:id/items/:itemId/substitute', writeLimiter, async (req, res, next) => {
   try {
     const { substitution_notes } = req.body;
     const result = await query(
@@ -173,7 +210,7 @@ router.patch('/:id/items/:itemId/substitute', async (req, res, next) => {
 });
 
 // PATCH customer responds to a proposed substitution
-router.patch('/:id/items/:itemId/substitution-response', async (req, res, next) => {
+router.patch('/:id/items/:itemId/substitution-response', writeLimiter, async (req, res, next) => {
   try {
     const { approved } = req.body;
     const itemResult = await query(
@@ -205,7 +242,7 @@ router.patch('/:id/items/:itemId/substitution-response', async (req, res, next) 
 });
 
 // POST manually assign a driver to an order (dispatcher override, bypasses offer/accept flow)
-router.post('/:id/assign-driver/:driverId', async (req, res, next) => {
+router.post('/:id/assign-driver/:driverId', writeLimiter, async (req, res, next) => {
   try {
     const result = await query(
       `UPDATE orders SET driver_id = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
@@ -214,14 +251,25 @@ router.post('/:id/assign-driver/:driverId', async (req, res, next) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Order not found' });
     }
-    res.json(result.rows[0]);
+    const order = result.rows[0];
+
+    sendSMS(order.contact_phone, `Stateside Deliveries: a driver has been assigned to your order #${order.id}.`);
+    const driverResult = await query(
+      `SELECT u.phone FROM drivers d JOIN users u ON d.user_id = u.id WHERE d.id = $1`,
+      [req.params.driverId]
+    );
+    if (driverResult.rows.length > 0) {
+      sendSMS(driverResult.rows[0].phone, `Stateside Deliveries: you've been assigned delivery #${order.id}. Check the app for pickup details.`);
+    }
+
+    res.json(order);
   } catch (err) {
     next(err);
   }
 });
 
 // POST record delivery proof and mark the order delivered
-router.post('/:id/delivery-proof', async (req, res, next) => {
+router.post('/:id/delivery-proof', writeLimiter, async (req, res, next) => {
   try {
     const { proof_type, proof_url, latitude, longitude, driver_id } = req.body;
 
@@ -242,6 +290,8 @@ router.post('/:id/delivery-proof', async (req, res, next) => {
         [driver_id]
       );
     }
+
+    sendSMS(orderResult.rows[0].contact_phone, `Stateside Deliveries: your order #${orderResult.rows[0].id} has been delivered. Enjoy!`);
 
     res.status(201).json(orderResult.rows[0]);
   } catch (err) {

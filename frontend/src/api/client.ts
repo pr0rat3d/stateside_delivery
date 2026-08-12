@@ -37,6 +37,19 @@ export async function getZones(): Promise<Zone[]> {
   return res.data;
 }
 
+export interface EtaResponse {
+  source: 'google_distance_matrix' | 'zone_estimate';
+  duration_minutes: number;
+  duration_text: string;
+  distance_text?: string;
+  note?: string;
+}
+
+export async function getEta(params: { merchant_id: number; pin_latitude: number; pin_longitude: number; zone_id: number }): Promise<EtaResponse> {
+  const res = await client.get('/maps/eta', { params });
+  return res.data;
+}
+
 export async function createOrder(payload: OrderPayload): Promise<Order> {
   const res = await client.post('/orders', payload);
   return res.data;
@@ -47,8 +60,21 @@ export async function getOrder(id: string | number): Promise<Order> {
   return res.data;
 }
 
-export async function createPaymentIntent(order_id: number, amount: number) {
+export interface PaymentIntentResponse {
+  payment_id: number;
+  amount: number;
+  status: string;
+  client_secret?: string;
+  message?: string;
+}
+
+export async function createPaymentIntent(order_id: number, amount: number): Promise<PaymentIntentResponse> {
   const res = await client.post('/payments/intent', { order_id, amount });
+  return res.data;
+}
+
+export async function confirmMockPayment(paymentId: number) {
+  const res = await client.post(`/payments/intent/${paymentId}/confirm-mock`);
   return res.data;
 }
 

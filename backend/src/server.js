@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import { connectDB } from './config/db.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/logging.js';
+import { generalLimiter } from './middleware/rateLimit.js';
 
 // Routes
 import healthRoutes from './routes/health.js';
@@ -14,17 +15,28 @@ import driverRoutes from './routes/drivers.js';
 import orderRoutes from './routes/orders.js';
 import zoneRoutes from './routes/zones.js';
 import adminRoutes from './routes/admin.js';
-import paymentRoutes from './routes/payments.js';
+import paymentRoutes, { stripeWebhookHandler } from './routes/payments.js';
 import supportRoutes from './routes/support.js';
+import mapsRoutes from './routes/maps.js';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173')
+  .split(',')
+  .map((o) => o.trim());
+
 // Middleware
 app.use(helmet());
-app.use(cors());
+app.use(cors({ origin: corsOrigins }));
+app.use(generalLimiter);
+
+// Stripe webhook needs the raw body for signature verification, so it's mounted
+// before the JSON body parser applies to everything else.
+app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), stripeWebhookHandler);
+
 app.use(express.json());
 app.use(requestLogger);
 
@@ -47,6 +59,7 @@ app.use('/api/zones', zoneRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/support-tickets', supportRoutes);
+app.use('/api/maps', mapsRoutes);
 
 // 404 handler
 app.use((req, res) => {

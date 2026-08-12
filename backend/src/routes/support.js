@@ -1,10 +1,13 @@
 import express from 'express';
 import { query } from '../config/db.js';
+import { writeLimiter } from '../middleware/rateLimit.js';
+import { validateBody } from '../middleware/validate.js';
+import { supportTicketSchema } from '../utils/schemas.js';
 
 const router = express.Router();
 
 // POST customer files a support ticket
-router.post('/', async (req, res, next) => {
+router.post('/', writeLimiter, validateBody(supportTicketSchema), async (req, res, next) => {
   try {
     const { order_id, customer_id, issue_type, description } = req.body;
     const result = await query(
@@ -41,7 +44,7 @@ router.get('/', async (req, res, next) => {
 });
 
 // PATCH admin resolves/updates a ticket
-router.patch('/:id', async (req, res, next) => {
+router.patch('/:id', writeLimiter, async (req, res, next) => {
   try {
     const { status, resolution } = req.body;
     const result = await query(

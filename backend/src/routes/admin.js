@@ -1,5 +1,8 @@
 import express from 'express';
 import { query } from '../config/db.js';
+import { writeLimiter } from '../middleware/rateLimit.js';
+import { validateBody } from '../middleware/validate.js';
+import { refundSchema } from '../utils/schemas.js';
 
 const router = express.Router();
 
@@ -61,7 +64,7 @@ router.get('/orders', async (req, res, next) => {
 });
 
 // POST issue refund
-router.post('/refunds/:order_id', async (req, res, next) => {
+router.post('/refunds/:order_id', writeLimiter, validateBody(refundSchema), async (req, res, next) => {
   try {
     const { refund_reason } = req.body;
     const result = await query(
@@ -105,7 +108,7 @@ router.get('/drivers', async (req, res, next) => {
 });
 
 // PATCH activate/deactivate a driver account
-router.patch('/drivers/:id/status', async (req, res, next) => {
+router.patch('/drivers/:id/status', writeLimiter, async (req, res, next) => {
   try {
     const { is_active } = req.body;
     const result = await query(
@@ -140,7 +143,7 @@ router.get('/merchants', async (req, res, next) => {
 });
 
 // PATCH activate/deactivate a merchant
-router.patch('/merchants/:id/status', async (req, res, next) => {
+router.patch('/merchants/:id/status', writeLimiter, async (req, res, next) => {
   try {
     const { is_active } = req.body;
     const result = await query(

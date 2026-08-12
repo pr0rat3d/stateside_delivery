@@ -1,5 +1,8 @@
 import express from 'express';
 import { query } from '../config/db.js';
+import { writeLimiter } from '../middleware/rateLimit.js';
+import { validateBody } from '../middleware/validate.js';
+import { createCustomerSchema } from '../utils/schemas.js';
 
 const router = express.Router();
 
@@ -23,7 +26,7 @@ router.get('/:id', async (req, res, next) => {
 });
 
 // POST register customer (stub)
-router.post('/', async (req, res, next) => {
+router.post('/', writeLimiter, validateBody(createCustomerSchema), async (req, res, next) => {
   try {
     const { email, full_name, phone } = req.body;
     // First create user

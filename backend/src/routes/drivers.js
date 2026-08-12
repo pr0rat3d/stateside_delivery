@@ -1,5 +1,7 @@
 import express from 'express';
 import { query } from '../config/db.js';
+import { writeLimiter } from '../middleware/rateLimit.js';
+import { sendSMS } from '../utils/sms.js';
 
 const router = express.Router();
 
@@ -38,7 +40,7 @@ router.get('/:id', async (req, res, next) => {
 });
 
 // PATCH update driver availability
-router.patch('/:id/availability', async (req, res, next) => {
+router.patch('/:id/availability', writeLimiter, async (req, res, next) => {
   try {
     const { availability_status } = req.body;
     const result = await query(
@@ -52,7 +54,7 @@ router.patch('/:id/availability', async (req, res, next) => {
 });
 
 // PATCH confirm cooler kit
-router.patch('/:id/cooler-kit', async (req, res, next) => {
+router.patch('/:id/cooler-kit', writeLimiter, async (req, res, next) => {
   try {
     const { cooler_kit_status } = req.body;
     const result = await query(
@@ -149,7 +151,7 @@ router.get('/:id/deliveries', async (req, res, next) => {
 });
 
 // POST driver accepts an offered order
-router.post('/:id/accept-order/:orderId', async (req, res, next) => {
+router.post('/:id/accept-order/:orderId', writeLimiter, async (req, res, next) => {
   try {
     const result = await query(
       `UPDATE orders SET driver_id = $1, updated_at = NOW()
@@ -160,14 +162,16 @@ router.post('/:id/accept-order/:orderId', async (req, res, next) => {
     if (result.rows.length === 0) {
       return res.status(409).json({ error: 'Order is no longer available' });
     }
-    res.json(result.rows[0]);
+    const order = result.rows[0];
+    sendSMS(order.contact_phone, `Stateside Deliveries: a driver has been assigned to your order #${order.id}.`);
+    res.json(order);
   } catch (err) {
     next(err);
   }
 });
 
 // POST driver declines an offered order (no persistence yet, ack only)
-router.post('/:id/decline-order/:orderId', async (req, res, next) => {
+router.post('/:id/decline-order/:orderId', writeLimiter, async (req, res, next) => {
   res.json({ declined: true, order_id: Number(req.params.orderId) });
 });
 

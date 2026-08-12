@@ -1,5 +1,8 @@
 import express from 'express';
 import { query } from '../config/db.js';
+import { writeLimiter } from '../middleware/rateLimit.js';
+import { validateBody } from '../middleware/validate.js';
+import { createZoneSchema, zoneSchema } from '../utils/schemas.js';
 
 const router = express.Router();
 
@@ -19,7 +22,7 @@ router.get('/', async (req, res, next) => {
 });
 
 // POST create zone (admin)
-router.post('/', async (req, res, next) => {
+router.post('/', writeLimiter, validateBody(createZoneSchema), async (req, res, next) => {
   try {
     const { name, base_delivery_fee, service_level, min_order_value, max_delivery_time_minutes } = req.body;
     const result = await query(
@@ -35,7 +38,7 @@ router.post('/', async (req, res, next) => {
 });
 
 // PATCH update zone (admin)
-router.patch('/:id', async (req, res, next) => {
+router.patch('/:id', writeLimiter, validateBody(zoneSchema), async (req, res, next) => {
   try {
     const { name, base_delivery_fee, service_level, min_order_value, max_delivery_time_minutes, is_active } = req.body;
     const result = await query(

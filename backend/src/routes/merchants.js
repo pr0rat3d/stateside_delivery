@@ -1,5 +1,8 @@
 import express from 'express';
 import { query } from '../config/db.js';
+import { writeLimiter } from '../middleware/rateLimit.js';
+import { validateBody } from '../middleware/validate.js';
+import { createMerchantSchema } from '../utils/schemas.js';
 
 const router = express.Router();
 
@@ -38,7 +41,7 @@ router.get('/:id', async (req, res, next) => {
 });
 
 // POST create merchant (stub)
-router.post('/', async (req, res, next) => {
+router.post('/', writeLimiter, validateBody(createMerchantSchema), async (req, res, next) => {
   try {
     const { user_id, business_name, category, phone, hours_open, hours_close } = req.body;
     const result = await query(
@@ -54,7 +57,7 @@ router.post('/', async (req, res, next) => {
 });
 
 // PATCH update merchant profile (hours, phone)
-router.patch('/:id', async (req, res, next) => {
+router.patch('/:id', writeLimiter, async (req, res, next) => {
   try {
     const { hours_open, hours_close, phone } = req.body;
     const result = await query(
@@ -118,7 +121,7 @@ router.get('/:id/menu', async (req, res, next) => {
 });
 
 // PATCH update a single menu item (availability, price)
-router.patch('/:id/menu/:itemId', async (req, res, next) => {
+router.patch('/:id/menu/:itemId', writeLimiter, async (req, res, next) => {
   try {
     const { is_available, price } = req.body;
     const result = await query(

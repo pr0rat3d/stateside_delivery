@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createOrder, createPaymentIntent, getZones } from '../api/client';
+import { confirmMockPayment, createOrder, createPaymentIntent, getEta, getZones, type EtaResponse } from '../api/client';
 import { useCart } from '../context/CartContext';
 import LocationPicker from '../components/LocationPicker';
-import { BUSINESS_HOURS, MAP_DEFAULT_CENTER, MOCK_CUSTOMER_ID } from '../config';
+import GoogleLocationPicker from '../components/GoogleLocationPicker';
+import StripeCheckoutForm from '../components/StripeCheckoutForm';
+import { BUSINESS_HOURS, GOOGLE_MAPS_CONFIGURED, MAP_DEFAULT_CENTER, MOCK_CUSTOMER_ID } from '../config';
 import type { SubstitutionPolicy, Zone } from '../types';
 
 const TIP_PRESETS = [0, 0.1, 0.15, 0.2];
@@ -32,6 +34,9 @@ export default function Checkout() {
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingOrderId, setPendingOrderId] = useState<number | null>(null);
+  const [paymentClientSecret, setPaymentClientSecret] = useState<string | null>(null);
+  const [eta, setEta] = useState<EtaResponse | null>(null);
 
   useEffect(() => {
     getZones().then((z) => {
@@ -39,6 +44,13 @@ export default function Checkout() {
       if (z.length > 0) setZoneId(z[0].id);
     });
   }, []);
+
+  useEffect(() => {
+    if (!zoneId || !cart.merchantId) return;
+    getEta({ merchant_id: cart.merchantId, pin_latitude: position[0], pin_longitude: position[1], zone_id: zoneId })
+      .then(setEta)
+      .catch(() => setEta(null));
+  }, [zoneId, position, cart.merchantId]);
 
   useEffect(() => {
     if (cart.items.length === 0) navigate('/');
@@ -114,18 +126,42 @@ export default function Checkout() {
         })),
       });
 
-      await createPaymentIntent(order.id, Number(order.total));
+      const paymentIntent = await createPaymentIntent(order.id, Number(order.total));
 
+      if (paymentIntent.client_secret) {
+        // Real Stripe is configured — hold off clearing the cart / navigating until the
+        // card is actually confirmed below.
+        setPendingOrderId(order.id);
+        setPaymentClientSecret(paymentIntent.client_secret);
+        setSubmitting(false);
+        return;
+      }
+
+      await confirmMockPayment(paymentIntent.payment_id);
       cart.clearCart();
       navigate(`/orders/${order.id}`);
     } catch {
       setError('Something went wrong placing your order. Please try again.');
-    } finally {
       setSubmitting(false);
     }
   }
 
-  if (cart.items.length === 0) return null;
+  function handleStripeSuccess() {
+    cart.clearCart();
+    navigate(`/orders/${pendingOrderId}`);
+  }
+
+  if (cart.items.length === 0 && !pendingOrderId) return null;
+
+  if (pendingOrderId && paymentClientSecret) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-6">
+        <h1 className="text-2xl font-bold text-gray-900 mb-1">Payment</h1>
+        <p className="text-gray-500 mb-6">Order #{pendingOrderId} · ${total.toFixed(2)}</p>
+        <StripeCheckoutForm clientSecret={paymentClientSecret} orderId={pendingOrderId} onSuccess={handleStripeSuccess} />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 pb-40">
@@ -169,7 +205,11 @@ export default function Checkout() {
       <section className="mb-6">
         <h2 className="font-semibold text-gray-800 mb-2">Delivery pin</h2>
         <p className="text-sm text-gray-500 mb-2">Click the map or drag the pin to your exact location.</p>
-        <LocationPicker position={position} onChange={setPosition} />
+        {GOOGLE_MAPS_CONFIGURED ? (
+          <GoogleLocationPicker position={position} onChange={setPosition} />
+        ) : (
+          <LocationPicker position={position} onChange={setPosition} />
+        )}
       </section>
 
       <section className="mb-6">
@@ -188,6 +228,12 @@ export default function Checkout() {
         {belowMinimum && (
           <p className="text-sm text-red-600 mt-1">
             Minimum order for this zone is ${Number(zone!.min_order_value).toFixed(2)}.
+          </p>
+        )}
+        {eta && (
+          <p className="text-sm text-gray-500 mt-1">
+            Estimated delivery time: {eta.duration_text}
+            {eta.source === 'zone_estimate' && ' (estimate)'}
           </p>
         )}
       </section>

@@ -10,13 +10,23 @@ const { Pool } = pg;
 // through whatever timezone the Node process or a client happens to be running in.
 pg.types.setTypeParser(1114, (value) => value);
 
-export const pool = new Pool({
-  host: process.env.DB_HOST || 'localhost',
-  port: process.env.DB_PORT || 5432,
-  user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME || 'stateside_deliveries',
-});
+// DATABASE_URL (a full connection string, as hosted Postgres providers like Neon give
+// you) takes priority when present. Cloud providers require SSL; a local Postgres
+// doesn't support it at all, so only enable SSL when the URL isn't pointing at localhost.
+const isLocalDatabaseUrl = /localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL || '');
+
+export const pool = process.env.DATABASE_URL
+  ? new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: isLocalDatabaseUrl ? false : { rejectUnauthorized: false },
+    })
+  : new Pool({
+      host: process.env.DB_HOST || 'localhost',
+      port: process.env.DB_PORT || 5432,
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME || 'stateside_deliveries',
+    });
 
 pool.on('error', (err) => {
   console.error('Unexpected error on idle client', err);

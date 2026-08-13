@@ -59,7 +59,6 @@ export default function OrderConfirmation() {
     if (!order || !issueText.trim()) return;
     await createSupportTicket({
       order_id: order.id,
-      customer_id: order.customer_id,
       issue_type: 'other',
       description: issueText.trim(),
     });

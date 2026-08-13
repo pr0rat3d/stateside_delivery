@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { acceptMerchantOrder, getIncomingOrders, rejectMerchantOrder, updateOrderStatus } from '../../api/client';
-import { useMerchantSession } from '../../merchant/useMerchantSession';
+import { useAuth } from '../../auth/AuthContext';
 import { formatNaiveTimestamp } from '../../utils/formatDate';
 import type { MerchantOrderSummary } from '../../types';
 
@@ -13,7 +13,8 @@ const NEXT_STATUS: Record<string, { label: string; next: string } | undefined> =
 };
 
 export default function MerchantDashboard() {
-  const { merchantId, logout } = useMerchantSession();
+  const { auth } = useAuth();
+  const merchantId = auth!.merchantId!;
   const navigate = useNavigate();
 
   const [incoming, setIncoming] = useState<MerchantOrderSummary[]>([]);
@@ -22,12 +23,7 @@ export default function MerchantDashboard() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!merchantId) navigate('/merchant/login');
-  }, [merchantId, navigate]);
-
   const refresh = useCallback(async () => {
-    if (!merchantId) return;
     try {
       const feed = await getIncomingOrders(merchantId);
       setIncoming(feed.incoming);
@@ -42,8 +38,6 @@ export default function MerchantDashboard() {
     const interval = setInterval(refresh, POLL_MS);
     return () => clearInterval(interval);
   }, [refresh]);
-
-  if (!merchantId) return null;
 
   async function handleAccept(order: MerchantOrderSummary) {
     setBusyId(order.id);
@@ -79,12 +73,7 @@ export default function MerchantDashboard() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Orders</h1>
-        <button onClick={logout} className="text-sm text-gray-500 underline">
-          Switch business
-        </button>
-      </div>
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">Orders</h1>
 
       {error && <p className="text-red-600 mb-4">{error}</p>}
 

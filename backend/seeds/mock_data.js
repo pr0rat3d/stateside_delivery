@@ -1,14 +1,19 @@
 import { query } from '../src/config/db.js';
+import { hashPassword } from '../src/utils/password.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
+
+const TEST_PASSWORD = 'password123';
 
 async function seedData() {
   try {
     console.log('Seeding mock data...');
 
     // Clear existing data (careful in production!)
-    await query('TRUNCATE TABLE users, customers, drivers, merchants, zones, menu_items, orders, order_items, payments RESTART IDENTITY CASCADE');
+    await query('TRUNCATE TABLE users, customers, drivers, merchants, zones, menu_items, orders, order_items, payments, support_tickets RESTART IDENTITY CASCADE');
+
+    const password_hash = await hashPassword(TEST_PASSWORD);
 
     // Create zones
     const zone1 = await query(
@@ -20,8 +25,9 @@ async function seedData() {
 
     // Create merchants (restaurant)
     const user1 = await query(
-      `INSERT INTO users (email, full_name, phone, role) VALUES ('fruitbowl@test.com', 'Fruit Bowl', '1-340-555-0001', 'merchant')
-       RETURNING id`
+      `INSERT INTO users (email, password_hash, full_name, phone, role) VALUES ('fruitbowl@test.com', $1, 'Fruit Bowl', '1-340-555-0001', 'merchant')
+       RETURNING id`,
+      [password_hash]
     );
     const merchant1 = await query(
       `INSERT INTO merchants (user_id, business_name, category, phone, hours_open, hours_close, commission_percent)
@@ -41,8 +47,9 @@ async function seedData() {
 
     // Create merchants (grocery)
     const user2 = await query(
-      `INSERT INTO users (email, full_name, phone, role) VALUES ('costless@test.com', 'Cost U Less', '1-340-555-0002', 'merchant')
-       RETURNING id`
+      `INSERT INTO users (email, password_hash, full_name, phone, role) VALUES ('costless@test.com', $1, 'Cost U Less', '1-340-555-0002', 'merchant')
+       RETURNING id`,
+      [password_hash]
     );
     const merchant2 = await query(
       `INSERT INTO merchants (user_id, business_name, category, phone, hours_open, hours_close, commission_percent)
@@ -64,8 +71,9 @@ async function seedData() {
 
     // Create test customer
     const userC = await query(
-      `INSERT INTO users (email, full_name, phone, role) VALUES ('guest@test.com', 'Test Customer', '1-340-555-9999', 'customer')
-       RETURNING id`
+      `INSERT INTO users (email, password_hash, full_name, phone, role) VALUES ('guest@test.com', $1, 'Test Customer', '1-340-555-9999', 'customer')
+       RETURNING id`,
+      [password_hash]
     );
     const customer = await query(
       `INSERT INTO customers (user_id, default_pin_lat, default_pin_lng) VALUES ($1, 18.3372, -64.8977)
@@ -75,8 +83,9 @@ async function seedData() {
 
     // Create test driver
     const userD = await query(
-      `INSERT INTO users (email, full_name, phone, role) VALUES ('driver@test.com', 'Test Driver', '1-340-555-8888', 'driver')
-       RETURNING id`
+      `INSERT INTO users (email, password_hash, full_name, phone, role) VALUES ('driver@test.com', $1, 'Test Driver', '1-340-555-8888', 'driver')
+       RETURNING id`,
+      [password_hash]
     );
     await query(
       `INSERT INTO drivers (user_id, license_number, license_verified, insurance_verified, cooler_kit_status, availability_status, total_deliveries)
@@ -84,7 +93,16 @@ async function seedData() {
       [userD.rows[0].id]
     );
 
+    // Create test admin
+    await query(
+      `INSERT INTO users (email, password_hash, full_name, phone, role) VALUES ('admin@test.com', $1, 'Test Admin', '1-340-555-0000', 'admin')`,
+      [password_hash]
+    );
+
     console.log('✓ Mock data seeded successfully');
+    console.log(`  Test login password for all seeded accounts: ${TEST_PASSWORD}`);
+    console.log('  fruitbowl@test.com (merchant), costless@test.com (merchant),');
+    console.log('  guest@test.com (customer), driver@test.com (driver), admin@test.com (admin)');
     process.exit(0);
   } catch (err) {
     console.error('✗ Seeding failed:', err);

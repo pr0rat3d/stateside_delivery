@@ -46,7 +46,6 @@ export interface CartItem {
 export type SubstitutionPolicy = 'exact_only' | 'customer_approval_required' | 'shopper_discretion';
 
 export interface OrderPayload {
-  customer_id: number;
   merchant_id: number;
   zone_id: number;
   pin_latitude: number;
@@ -214,6 +213,18 @@ export interface Report {
   repeat_customers: number;
   total_customers: number;
   driver_utilization: { id: number; full_name: string; availability_status: string; deliveries_last_14_days: string }[];
+}
+
+export type Role = 'customer' | 'driver' | 'merchant' | 'admin';
+
+export interface AuthResponse {
+  token: string;
+  role: Role;
+  full_name: string;
+  customer_id?: number;
+  driver_id?: number;
+  merchant_id?: number;
+  message?: string;
 }
 
 export interface SupportTicket {

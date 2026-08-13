@@ -1,26 +1,23 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDriverDeliveries } from '../../api/client';
-import { useDriverSession } from '../../driver/useDriverSession';
+import { useAuth } from '../../auth/AuthContext';
 import { formatNaiveTimestamp } from '../../utils/formatDate';
 import type { Delivery } from '../../types';
 
 export default function DriverHistory() {
-  const { driverId } = useDriverSession();
+  const { auth } = useAuth();
+  const driverId = auth!.driverId!;
   const navigate = useNavigate();
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [earnings, setEarnings] = useState(0);
 
   useEffect(() => {
-    if (!driverId) {
-      navigate('/driver/login');
-      return;
-    }
     getDriverDeliveries(driverId).then((data) => {
       setDeliveries(data.deliveries);
       setEarnings(data.earnings);
     });
-  }, [driverId, navigate]);
+  }, [driverId]);
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">

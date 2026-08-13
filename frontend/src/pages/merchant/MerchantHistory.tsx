@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { getMerchantHistory } from '../../api/client';
-import { useMerchantSession } from '../../merchant/useMerchantSession';
+import { useAuth } from '../../auth/AuthContext';
 import { formatNaiveTimestamp } from '../../utils/formatDate';
 import type { MerchantHistory as MerchantHistoryData } from '../../types';
 
@@ -12,17 +11,13 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 export default function MerchantHistory() {
-  const { merchantId } = useMerchantSession();
-  const navigate = useNavigate();
+  const { auth } = useAuth();
+  const merchantId = auth!.merchantId!;
   const [data, setData] = useState<MerchantHistoryData | null>(null);
 
   useEffect(() => {
-    if (!merchantId) {
-      navigate('/merchant/login');
-      return;
-    }
     getMerchantHistory(merchantId).then(setData);
-  }, [merchantId, navigate]);
+  }, [merchantId]);
 
   if (!data) return <p className="max-w-2xl mx-auto px-4 py-6 text-gray-500">Loading history...</p>;
 

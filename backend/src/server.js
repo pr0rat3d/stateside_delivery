@@ -18,6 +18,7 @@ import adminRoutes from './routes/admin.js';
 import paymentRoutes, { stripeWebhookHandler } from './routes/payments.js';
 import supportRoutes from './routes/support.js';
 import mapsRoutes from './routes/maps.js';
+import authRoutes from './routes/auth.js';
 
 dotenv.config();
 
@@ -60,6 +61,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/support-tickets', supportRoutes);
 app.use('/api/maps', mapsRoutes);
+app.use('/api/auth', authRoutes);
 
 // 404 handler
 app.use((req, res) => {

@@ -10,13 +10,14 @@ import {
   setDriverAvailability,
   setDriverCoolerKit,
 } from '../../api/client';
-import { useDriverSession } from '../../driver/useDriverSession';
+import { useAuth } from '../../auth/AuthContext';
 import type { Driver, DriverOrder } from '../../types';
 
 const POLL_MS = 10000;
 
 export default function DriverDashboard() {
-  const { driverId, logout } = useDriverSession();
+  const { auth } = useAuth();
+  const driverId = auth!.driverId!;
   const navigate = useNavigate();
 
   const [driver, setDriver] = useState<Driver | null>(null);
@@ -26,12 +27,7 @@ export default function DriverDashboard() {
   const [busyOrderId, setBusyOrderId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!driverId) navigate('/driver/login');
-  }, [driverId, navigate]);
-
   const refresh = useCallback(async () => {
-    if (!driverId) return;
     try {
       const [driverData, active, deliveries] = await Promise.all([
         getDriver(driverId),
@@ -58,7 +54,7 @@ export default function DriverDashboard() {
     return () => clearInterval(interval);
   }, [refresh]);
 
-  if (!driverId || !driver) return <p className="max-w-2xl mx-auto px-4 py-6 text-gray-500">Loading...</p>;
+  if (!driver) return <p className="max-w-2xl mx-auto px-4 py-6 text-gray-500">Loading...</p>;
 
   async function toggleAvailability() {
     if (!driver) return;
@@ -99,14 +95,9 @@ export default function DriverDashboard() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{driver.full_name}</h1>
-          <p className="text-sm text-gray-500">{driver.total_deliveries} lifetime deliveries · ${earnings.toFixed(2)} this period</p>
-        </div>
-        <button onClick={logout} className="text-sm text-gray-500 underline">
-          Switch driver
-        </button>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">{driver.full_name}</h1>
+        <p className="text-sm text-gray-500">{driver.total_deliveries} lifetime deliveries · ${earnings.toFixed(2)} this period</p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 mb-6">

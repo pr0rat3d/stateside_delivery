@@ -16,11 +16,57 @@ import type {
   AdminMerchant,
   Report,
   SupportTicket,
+  AuthResponse,
 } from '../types';
+import { getStoredToken, clearStoredAuth } from '../auth/AuthContext';
 
 const baseURL = `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api`;
 
 const client = axios.create({ baseURL });
+
+client.interceptors.request.use((config) => {
+  const token = getStoredToken();
+  if (token) {
+    config.headers = config.headers ?? {};
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+client.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      clearStoredAuth();
+    }
+    return Promise.reject(error);
+  }
+);
+
+export async function loginRequest(email: string, password: string): Promise<AuthResponse> {
+  const res = await client.post('/auth/login', { email, password });
+  return res.data;
+}
+
+export async function registerCustomer(payload: { email: string; password: string; full_name: string; phone?: string }): Promise<AuthResponse> {
+  const res = await client.post('/auth/register/customer', payload);
+  return res.data;
+}
+
+export async function registerDriver(payload: {
+  email: string; password: string; full_name: string; phone?: string; license_number: string;
+}): Promise<AuthResponse> {
+  const res = await client.post('/auth/register/driver', payload);
+  return res.data;
+}
+
+export async function registerMerchant(payload: {
+  email: string; password: string; full_name: string; phone?: string;
+  business_name: string; category: string; hours_open?: string; hours_close?: string;
+}): Promise<AuthResponse> {
+  const res = await client.post('/auth/register/merchant', payload);
+  return res.data;
+}
 
 export async function getMerchants(): Promise<Merchant[]> {
   const res = await client.get('/merchants');
@@ -75,11 +121,6 @@ export async function createPaymentIntent(order_id: number, amount: number): Pro
 
 export async function confirmMockPayment(paymentId: number) {
   const res = await client.post(`/payments/intent/${paymentId}/confirm-mock`);
-  return res.data;
-}
-
-export async function getDrivers(): Promise<Driver[]> {
-  const res = await client.get('/drivers');
   return res.data;
 }
 
@@ -255,7 +296,6 @@ export async function updateSupportTicket(
 
 export async function createSupportTicket(payload: {
   order_id: number;
-  customer_id: number;
   issue_type: string;
   description: string;
 }): Promise<SupportTicket> {

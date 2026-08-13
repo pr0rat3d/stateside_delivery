@@ -3,8 +3,12 @@ import { query } from '../config/db.js';
 import { writeLimiter } from '../middleware/rateLimit.js';
 import { validateBody } from '../middleware/validate.js';
 import { refundSchema } from '../utils/schemas.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
+
+// Every route in this file is admin-only
+router.use(requireAuth, requireRole('admin'));
 
 // GET dashboard stats
 router.get('/stats', async (req, res, next) => {

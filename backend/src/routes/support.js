@@ -3,13 +3,21 @@ import { query } from '../config/db.js';
 import { writeLimiter } from '../middleware/rateLimit.js';
 import { validateBody } from '../middleware/validate.js';
 import { supportTicketSchema } from '../utils/schemas.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// POST customer files a support ticket
-router.post('/', writeLimiter, validateBody(supportTicketSchema), async (req, res, next) => {
+// POST customer files a support ticket for their own order
+router.post('/', requireAuth, requireRole('customer'), writeLimiter, validateBody(supportTicketSchema), async (req, res, next) => {
   try {
-    const { order_id, customer_id, issue_type, description } = req.body;
+    const { order_id, issue_type, description } = req.body;
+    const customer_id = req.user.customer_id;
+
+    const orderResult = await query('SELECT id FROM orders WHERE id = $1 AND customer_id = $2', [order_id, customer_id]);
+    if (orderResult.rows.length === 0) {
+      return res.status(403).json({ error: 'That order does not belong to you' });
+    }
+
     const result = await query(
       `INSERT INTO support_tickets (order_id, customer_id, issue_type, description)
        VALUES ($1, $2, $3, $4)
@@ -23,7 +31,7 @@ router.post('/', writeLimiter, validateBody(supportTicketSchema), async (req, re
 });
 
 // GET all tickets (admin queue), optionally filtered by status
-router.get('/', async (req, res, next) => {
+router.get('/', requireAuth, requireRole('admin'), async (req, res, next) => {
   try {
     const { status } = req.query;
     const result = await query(
@@ -44,7 +52,7 @@ router.get('/', async (req, res, next) => {
 });
 
 // PATCH admin resolves/updates a ticket
-router.patch('/:id', writeLimiter, async (req, res, next) => {
+router.patch('/:id', requireAuth, requireRole('admin'), writeLimiter, async (req, res, next) => {
   try {
     const { status, resolution } = req.body;
     const result = await query(

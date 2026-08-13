@@ -1,27 +1,20 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { getFullMenu, updateMenuItem } from '../../api/client';
-import { useMerchantSession } from '../../merchant/useMerchantSession';
+import { useAuth } from '../../auth/AuthContext';
 import type { MenuItem } from '../../types';
 
 export default function MerchantMenu() {
-  const { merchantId } = useMerchantSession();
-  const navigate = useNavigate();
+  const { auth } = useAuth();
+  const merchantId = auth!.merchantId!;
   const [items, setItems] = useState<MenuItem[]>([]);
   const [priceDrafts, setPriceDrafts] = useState<Record<number, string>>({});
 
   useEffect(() => {
-    if (!merchantId) {
-      navigate('/merchant/login');
-      return;
-    }
     getFullMenu(merchantId).then(setItems);
-  }, [merchantId, navigate]);
-
-  if (!merchantId) return null;
+  }, [merchantId]);
 
   async function toggleAvailability(item: MenuItem) {
-    const updated = await updateMenuItem(merchantId!, item.id, { is_available: !item.is_available });
+    const updated = await updateMenuItem(merchantId, item.id, { is_available: !item.is_available });
     setItems((prev) => prev.map((i) => (i.id === item.id ? updated : i)));
   }
 
@@ -30,7 +23,7 @@ export default function MerchantMenu() {
     if (draft === undefined) return;
     const price = Number(draft);
     if (Number.isNaN(price) || price <= 0) return;
-    const updated = await updateMenuItem(merchantId!, item.id, { price });
+    const updated = await updateMenuItem(merchantId, item.id, { price });
     setItems((prev) => prev.map((i) => (i.id === item.id ? updated : i)));
     setPriceDrafts((prev) => {
       const next = { ...prev };

@@ -5,7 +5,7 @@ import { useCart } from '../context/CartContext';
 import LocationPicker from '../components/LocationPicker';
 import GoogleLocationPicker from '../components/GoogleLocationPicker';
 import StripeCheckoutForm from '../components/StripeCheckoutForm';
-import { BUSINESS_HOURS, GOOGLE_MAPS_CONFIGURED, MAP_DEFAULT_CENTER, MOCK_CUSTOMER_ID } from '../config';
+import { BUSINESS_HOURS, GOOGLE_MAPS_CONFIGURED, MAP_DEFAULT_CENTER } from '../config';
 import type { SubstitutionPolicy, Zone } from '../types';
 
 const TIP_PRESETS = [0, 0.1, 0.15, 0.2];
@@ -103,7 +103,6 @@ export default function Checkout() {
     setSubmitting(true);
     try {
       const order = await createOrder({
-        customer_id: MOCK_CUSTOMER_ID,
         merchant_id: cart.merchantId!,
         zone_id: zoneId,
         pin_latitude: position[0],

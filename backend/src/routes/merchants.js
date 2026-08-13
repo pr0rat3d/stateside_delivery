@@ -1,12 +1,11 @@
 import express from 'express';
 import { query } from '../config/db.js';
 import { writeLimiter } from '../middleware/rateLimit.js';
-import { validateBody } from '../middleware/validate.js';
-import { createMerchantSchema } from '../utils/schemas.js';
+import { requireAuth, requireSelfOrAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// GET all merchants
+// GET all merchants — public browsing
 router.get('/', async (req, res, next) => {
   try {
     const result = await query(
@@ -21,7 +20,7 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-// GET merchant by ID with menu
+// GET merchant by ID with menu — public browsing
 router.get('/:id', async (req, res, next) => {
   try {
     const merchantResult = await query('SELECT * FROM merchants WHERE id = $1', [req.params.id]);
@@ -40,24 +39,8 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
-// POST create merchant (stub)
-router.post('/', writeLimiter, validateBody(createMerchantSchema), async (req, res, next) => {
-  try {
-    const { user_id, business_name, category, phone, hours_open, hours_close } = req.body;
-    const result = await query(
-      `INSERT INTO merchants (user_id, business_name, category, phone, hours_open, hours_close)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING *`,
-      [user_id, business_name, category, phone, hours_open, hours_close]
-    );
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    next(err);
-  }
-});
-
-// PATCH update merchant profile (hours, phone)
-router.patch('/:id', writeLimiter, async (req, res, next) => {
+// PATCH update merchant profile (hours, phone) — the merchant themself, or an admin
+router.patch('/:id', requireAuth, requireSelfOrAdmin('id', 'merchant_id'), writeLimiter, async (req, res, next) => {
   try {
     const { hours_open, hours_close, phone } = req.body;
     const result = await query(
@@ -78,8 +61,8 @@ router.patch('/:id', writeLimiter, async (req, res, next) => {
   }
 });
 
-// GET orders awaiting merchant action, split from those already in progress
-router.get('/:id/incoming-orders', async (req, res, next) => {
+// GET orders awaiting merchant action — the merchant themself, or an admin
+router.get('/:id/incoming-orders', requireAuth, requireSelfOrAdmin('id', 'merchant_id'), async (req, res, next) => {
   try {
     const result = await query(
       `SELECT o.id, o.status, o.total, o.order_type, o.scheduled_delivery_time,
@@ -107,8 +90,8 @@ router.get('/:id/incoming-orders', async (req, res, next) => {
   }
 });
 
-// GET full menu for edit mode (includes unavailable items)
-router.get('/:id/menu', async (req, res, next) => {
+// GET full menu for edit mode (includes unavailable items) — the merchant themself, or an admin
+router.get('/:id/menu', requireAuth, requireSelfOrAdmin('id', 'merchant_id'), async (req, res, next) => {
   try {
     const result = await query(
       'SELECT * FROM menu_items WHERE merchant_id = $1 ORDER BY category, name',
@@ -120,8 +103,8 @@ router.get('/:id/menu', async (req, res, next) => {
   }
 });
 
-// PATCH update a single menu item (availability, price)
-router.patch('/:id/menu/:itemId', writeLimiter, async (req, res, next) => {
+// PATCH update a single menu item (availability, price) — the merchant themself, or an admin
+router.patch('/:id/menu/:itemId', requireAuth, requireSelfOrAdmin('id', 'merchant_id'), writeLimiter, async (req, res, next) => {
   try {
     const { is_available, price } = req.body;
     const result = await query(
@@ -142,8 +125,8 @@ router.patch('/:id/menu/:itemId', writeLimiter, async (req, res, next) => {
   }
 });
 
-// GET historical orders and revenue for this merchant
-router.get('/:id/history', async (req, res, next) => {
+// GET historical orders and revenue for this merchant — the merchant themself, or an admin
+router.get('/:id/history', requireAuth, requireSelfOrAdmin('id', 'merchant_id'), async (req, res, next) => {
   try {
     const merchantResult = await query('SELECT commission_percent FROM merchants WHERE id = $1', [req.params.id]);
     if (merchantResult.rows.length === 0) {

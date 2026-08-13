@@ -4,20 +4,24 @@ import { stripe, stripeConfigured } from '../utils/stripe.js';
 import { paymentLimiter } from '../middleware/rateLimit.js';
 import { validateBody } from '../middleware/validate.js';
 import { paymentIntentSchema } from '../utils/schemas.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // POST create payment intent — real Stripe PaymentIntent when configured, mock otherwise
-router.post('/intent', paymentLimiter, validateBody(paymentIntentSchema), async (req, res, next) => {
+router.post('/intent', requireAuth, requireRole('customer'), paymentLimiter, validateBody(paymentIntentSchema), async (req, res, next) => {
   try {
     const { order_id, amount } = req.body;
 
-    if (stripeConfigured) {
-      const orderResult = await query('SELECT total FROM orders WHERE id = $1', [order_id]);
-      if (orderResult.rows.length === 0) {
-        return res.status(404).json({ error: 'Order not found' });
-      }
+    const orderResult = await query('SELECT total, customer_id FROM orders WHERE id = $1', [order_id]);
+    if (orderResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    if (orderResult.rows[0].customer_id !== req.user.customer_id) {
+      return res.status(403).json({ error: 'That order does not belong to you' });
+    }
 
+    if (stripeConfigured) {
       const paymentIntent = await stripe.paymentIntents.create({
         amount: Math.round(Number(orderResult.rows[0].total) * 100), // Stripe expects cents
         currency: 'usd',
@@ -61,18 +65,26 @@ router.post('/intent', paymentLimiter, validateBody(paymentIntentSchema), async 
 
 // POST mark a mock payment as succeeded (only used when Stripe isn't configured —
 // with real Stripe, the webhook below is the source of truth instead)
-router.post('/intent/:id/confirm-mock', paymentLimiter, async (req, res, next) => {
+router.post('/intent/:id/confirm-mock', requireAuth, requireRole('customer'), paymentLimiter, async (req, res, next) => {
   try {
     if (stripeConfigured) {
       return res.status(409).json({ error: 'Stripe is configured; confirm payment via Stripe, not this endpoint' });
     }
+    const ownerResult = await query(
+      `SELECT o.customer_id FROM payments p JOIN orders o ON p.order_id = o.id WHERE p.id = $1`,
+      [req.params.id]
+    );
+    if (ownerResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Payment not found' });
+    }
+    if (ownerResult.rows[0].customer_id !== req.user.customer_id) {
+      return res.status(403).json({ error: 'That payment does not belong to you' });
+    }
+
     const result = await query(
       `UPDATE payments SET status = 'succeeded', updated_at = NOW() WHERE id = $1 RETURNING *`,
       [req.params.id]
     );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Payment not found' });
-    }
     res.json(result.rows[0]);
   } catch (err) {
     next(err);

@@ -4,14 +4,54 @@ import { writeLimiter } from '../middleware/rateLimit.js';
 import { validateBody } from '../middleware/validate.js';
 import { createOrderSchema } from '../utils/schemas.js';
 import { sendSMS } from '../utils/sms.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
+async function loadOrder(req, res, next) {
+  const result = await query('SELECT * FROM orders WHERE id = $1', [req.params.id]);
+  if (result.rows.length === 0) {
+    return res.status(404).json({ error: 'Order not found' });
+  }
+  req.order = result.rows[0];
+  next();
+}
+
+// Any of: the customer who placed it, the merchant fulfilling it, the driver assigned
+// to it, or an admin. Must run after loadOrder.
+function requireOrderParty(req, res, next) {
+  const { user, order } = req;
+  const authorized =
+    user.role === 'admin' ||
+    (user.role === 'customer' && user.customer_id === order.customer_id) ||
+    (user.role === 'merchant' && user.merchant_id === order.merchant_id) ||
+    (user.role === 'driver' && user.driver_id === order.driver_id);
+  if (!authorized) return res.status(403).json({ error: 'Not authorized for this order' });
+  next();
+}
+
+function requireOwningMerchant(req, res, next) {
+  const { user, order } = req;
+  if (user.role === 'admin' || (user.role === 'merchant' && user.merchant_id === order.merchant_id)) return next();
+  return res.status(403).json({ error: 'Not authorized for this order' });
+}
+
+function requireOwningCustomer(req, res, next) {
+  const { user, order } = req;
+  if (user.role === 'admin' || (user.role === 'customer' && user.customer_id === order.customer_id)) return next();
+  return res.status(403).json({ error: 'Not authorized for this order' });
+}
+
+function requireAssignedDriver(req, res, next) {
+  const { user, order } = req;
+  if (user.role === 'admin' || (user.role === 'driver' && user.driver_id === order.driver_id)) return next();
+  return res.status(403).json({ error: 'Not authorized for this order' });
+}
+
 // POST create order
-router.post('/', writeLimiter, validateBody(createOrderSchema), async (req, res, next) => {
+router.post('/', requireAuth, requireRole('customer'), writeLimiter, validateBody(createOrderSchema), async (req, res, next) => {
   try {
     const {
-      customer_id,
       merchant_id,
       zone_id,
       pin_latitude,
@@ -28,6 +68,7 @@ router.post('/', writeLimiter, validateBody(createOrderSchema), async (req, res,
       order_type,
       tip,
     } = req.body;
+    const customer_id = req.user.customer_id;
 
     const zoneResult = await query('SELECT base_delivery_fee FROM zones WHERE id = $1 AND is_active = true', [zone_id]);
     if (zoneResult.rows.length === 0) {
@@ -107,8 +148,8 @@ router.post('/', writeLimiter, validateBody(createOrderSchema), async (req, res,
   }
 });
 
-// GET order by ID
-router.get('/:id', async (req, res, next) => {
+// GET order by ID — the customer, merchant, assigned driver, or an admin
+router.get('/:id', requireAuth, loadOrder, requireOrderParty, async (req, res, next) => {
   try {
     const orderResult = await query(
       `SELECT o.*, u.full_name AS customer_name, m.business_name AS merchant_name, du.full_name AS driver_name
@@ -121,9 +162,6 @@ router.get('/:id', async (req, res, next) => {
        WHERE o.id = $1`,
       [req.params.id]
     );
-    if (orderResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
 
     const itemsResult = await query('SELECT * FROM order_items WHERE order_id = $1', [req.params.id]);
 
@@ -136,8 +174,8 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
-// PATCH update order status
-router.patch('/:id/status', writeLimiter, async (req, res, next) => {
+// PATCH update order status — the owning merchant (prep stages) or assigned driver (pickup/delivery), or admin
+router.patch('/:id/status', requireAuth, loadOrder, requireOrderParty, writeLimiter, async (req, res, next) => {
   try {
     const { status } = req.body;
     const result = await query(
@@ -153,7 +191,7 @@ router.patch('/:id/status', writeLimiter, async (req, res, next) => {
 });
 
 // PATCH merchant accepts the order with a prep time estimate
-router.patch('/:id/accept', writeLimiter, async (req, res, next) => {
+router.patch('/:id/accept', requireAuth, loadOrder, requireOwningMerchant, writeLimiter, async (req, res, next) => {
   try {
     const { estimated_prep_minutes } = req.body;
     const minutes = Number(estimated_prep_minutes) || 15;
@@ -175,7 +213,7 @@ router.patch('/:id/accept', writeLimiter, async (req, res, next) => {
 });
 
 // PATCH merchant rejects the order
-router.patch('/:id/reject', writeLimiter, async (req, res, next) => {
+router.patch('/:id/reject', requireAuth, loadOrder, requireOwningMerchant, writeLimiter, async (req, res, next) => {
   try {
     const result = await query(
       `UPDATE orders SET status = 'cancelled', updated_at = NOW()
@@ -192,7 +230,7 @@ router.patch('/:id/reject', writeLimiter, async (req, res, next) => {
 });
 
 // PATCH merchant proposes a substitution for an out-of-stock item (text-based note; no photo storage in MVP)
-router.patch('/:id/items/:itemId/substitute', writeLimiter, async (req, res, next) => {
+router.patch('/:id/items/:itemId/substitute', requireAuth, loadOrder, requireOwningMerchant, writeLimiter, async (req, res, next) => {
   try {
     const { substitution_notes } = req.body;
     const result = await query(
@@ -210,7 +248,7 @@ router.patch('/:id/items/:itemId/substitute', writeLimiter, async (req, res, nex
 });
 
 // PATCH customer responds to a proposed substitution
-router.patch('/:id/items/:itemId/substitution-response', writeLimiter, async (req, res, next) => {
+router.patch('/:id/items/:itemId/substitution-response', requireAuth, loadOrder, requireOwningCustomer, writeLimiter, async (req, res, next) => {
   try {
     const { approved } = req.body;
     const itemResult = await query(
@@ -241,8 +279,8 @@ router.patch('/:id/items/:itemId/substitution-response', writeLimiter, async (re
   }
 });
 
-// POST manually assign a driver to an order (dispatcher override, bypasses offer/accept flow)
-router.post('/:id/assign-driver/:driverId', writeLimiter, async (req, res, next) => {
+// POST manually assign a driver to an order — admin only (dispatcher override, bypasses offer/accept flow)
+router.post('/:id/assign-driver/:driverId', requireAuth, requireRole('admin'), writeLimiter, async (req, res, next) => {
   try {
     const result = await query(
       `UPDATE orders SET driver_id = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
@@ -268,8 +306,8 @@ router.post('/:id/assign-driver/:driverId', writeLimiter, async (req, res, next)
   }
 });
 
-// POST record delivery proof and mark the order delivered
-router.post('/:id/delivery-proof', writeLimiter, async (req, res, next) => {
+// POST record delivery proof and mark the order delivered — the assigned driver, or admin
+router.post('/:id/delivery-proof', requireAuth, loadOrder, requireAssignedDriver, writeLimiter, async (req, res, next) => {
   try {
     const { proof_type, proof_url, latitude, longitude, driver_id } = req.body;
 

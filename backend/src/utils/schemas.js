@@ -3,9 +3,41 @@ import { z } from 'zod';
 const phone = z.string().trim().min(1).max(20);
 const latitude = z.number().min(-90).max(90);
 const longitude = z.number().min(-180).max(180);
+const password = z.string().min(8).max(200);
+const email = z.string().trim().toLowerCase().email().max(255);
+
+export const registerCustomerSchema = z.object({
+  email,
+  password,
+  full_name: z.string().trim().min(1).max(255),
+  phone: phone.optional(),
+});
+
+export const registerDriverSchema = z.object({
+  email,
+  password,
+  full_name: z.string().trim().min(1).max(255),
+  phone: phone.optional(),
+  license_number: z.string().trim().min(1).max(50),
+});
+
+export const registerMerchantSchema = z.object({
+  email,
+  password,
+  full_name: z.string().trim().min(1).max(255),
+  phone: phone.optional(),
+  business_name: z.string().trim().min(1).max(255),
+  category: z.enum(['restaurant', 'grocery', 'convenience', 'provisioning']),
+  hours_open: z.string().max(10).optional(),
+  hours_close: z.string().max(10).optional(),
+});
+
+export const loginSchema = z.object({
+  email,
+  password: z.string().min(1).max(200),
+});
 
 export const createOrderSchema = z.object({
-  customer_id: z.number().int().positive(),
   merchant_id: z.number().int().positive(),
   zone_id: z.number().int().positive(),
   pin_latitude: latitude,
@@ -28,21 +60,6 @@ export const createOrderSchema = z.object({
   ).min(1).max(100),
 });
 
-export const createCustomerSchema = z.object({
-  email: z.string().trim().email().max(255),
-  full_name: z.string().trim().min(1).max(255),
-  phone: phone.optional(),
-});
-
-export const createMerchantSchema = z.object({
-  user_id: z.number().int().positive(),
-  business_name: z.string().trim().min(1).max(255),
-  category: z.enum(['restaurant', 'grocery', 'convenience', 'provisioning']),
-  phone: phone.optional(),
-  hours_open: z.string().max(10).optional(),
-  hours_close: z.string().max(10).optional(),
-});
-
 export const paymentIntentSchema = z.object({
   order_id: z.number().int().positive(),
   amount: z.number().positive().max(100000),
@@ -54,7 +71,6 @@ export const refundSchema = z.object({
 
 export const supportTicketSchema = z.object({
   order_id: z.number().int().positive(),
-  customer_id: z.number().int().positive(),
   issue_type: z.string().trim().min(1).max(100),
   description: z.string().trim().min(1).max(2000),
 });

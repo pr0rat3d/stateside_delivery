@@ -105,19 +105,44 @@ restart the server.
 6. Trial accounts can only text verified numbers — verify your test phone number in the
    Twilio Console before testing
 
+## Authentication
+
+Every role (customer, driver, merchant, admin) has a real account with a bcrypt-hashed
+password and a JWT issued on login. The frontend attaches it as `Authorization: Bearer
+<token>` on every request (`src/middleware/auth.js` on the backend, an axios interceptor
+on the frontend). Token payload carries `role` plus the role-specific id
+(`customer_id`/`driver_id`/`merchant_id`), so route guards can check ownership without
+an extra DB lookup.
+
+- **Customer, driver, and merchant** accounts are self-service — anyone can register.
+  Driver and merchant accounts start unverified/inactive respectively (see the existing
+  `license_verified`, `insurance_verified`, `is_active` columns) until an admin approves
+  them; a merchant's storefront stays hidden from customer browsing until then.
+- **Admin** accounts are never self-service — there is no public registration endpoint
+  for the `admin` role. Create one via the seed script or directly in the database.
+- Route guards (`requireAuth`, `requireRole`, `requireSelfOrAdmin`, and a few bespoke
+  order-ownership checks in `routes/orders.js`) are applied across every route file —
+  a driver can only act on their own deliveries, a merchant only on their own orders and
+  menu, a customer only on their own orders, and `/api/admin/*` is admin-only throughout.
+- Login: `POST /api/auth/login` (any role). Register: `POST /api/auth/register/customer`,
+  `/register/driver`, `/register/merchant`. `GET /api/auth/me` returns the decoded token.
+
+**Test credentials** (after `npm run seed`), password `password123` for all:
+`fruitbowl@test.com` / `costless@test.com` (merchant), `guest@test.com` (customer),
+`driver@test.com` (driver), `admin@test.com` (admin).
+
 ## Security notes
 
 - Rate limiting is applied globally and more strictly on write endpoints
-  (`src/middleware/rateLimit.js`)
+  (`src/middleware/rateLimit.js`), with a tighter limit on `/api/auth/*` for brute-force
+  protection
 - Order creation prices and validates every line item server-side against `menu_items`
   — client-supplied price/name are never trusted
 - Request bodies on high-risk endpoints are validated with `zod` (`src/utils/schemas.js`)
 - `CORS_ORIGIN` restricts which frontend origin(s) may call the API — set this to your
   real domain(s) before deploying
-- There is still no real authentication (every role uses a mock identity picker in the
-  frontend) — every `/api/admin/*`, `/api/merchants/:id/menu/*`, etc. endpoint is
-  currently reachable by anyone who can reach the API. Add JWT-based auth and
-  role-checked route guards before any real deployment.
+- `JWT_SECRET` ships with a placeholder default that works fine locally but **must** be
+  rotated to a real random secret before any real deployment
 
 ## API Endpoints (Phase 1)
 
@@ -164,7 +189,8 @@ the route files under `src/routes/` for the full current list.
 - Phase 3: Driver app & dispatch — done
 - Phase 4: Merchant portal — done
 - Phase 5: Admin dashboard — done
-- Phase 6: Real integrations (Stripe, Google Maps, Twilio) + security hardening — done;
-  real credentials still need to be added per "Enabling real integrations" above.
-  Remaining from the original Phase 6 scope: real email receipts, staging environment
-  + deployment pipeline, and performance monitoring/error tracking.
+- Phase 6: Real integrations (Stripe, Google Maps, Twilio) + security hardening
+  (including JWT auth and role-checked route guards, added after the initial Phase 6
+  pass) — done; real credentials still need to be added per "Enabling real
+  integrations" above. Remaining from the original Phase 6 scope: real email receipts,
+  staging environment + deployment pipeline, and performance monitoring/error tracking.

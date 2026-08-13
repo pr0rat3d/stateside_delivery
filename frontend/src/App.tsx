@@ -1,4 +1,6 @@
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
+import { AuthProvider } from './auth/AuthContext';
+import RequireRole from './auth/RequireRole';
 import { CartProvider } from './context/CartContext';
 import Navbar from './components/Navbar';
 import DriverNavbar from './components/DriverNavbar';
@@ -8,15 +10,20 @@ import MerchantList from './pages/MerchantList';
 import MerchantDetail from './pages/MerchantDetail';
 import Checkout from './pages/Checkout';
 import OrderConfirmation from './pages/OrderConfirmation';
+import CustomerLogin from './pages/CustomerLogin';
+import CustomerRegister from './pages/CustomerRegister';
 import DriverLogin from './pages/driver/DriverLogin';
+import DriverRegister from './pages/driver/DriverRegister';
 import DriverDashboard from './pages/driver/DriverDashboard';
 import DriverOrderDetail from './pages/driver/DriverOrderDetail';
 import DriverHistory from './pages/driver/DriverHistory';
 import MerchantLogin from './pages/merchant/MerchantLogin';
+import MerchantRegister from './pages/merchant/MerchantRegister';
 import MerchantDashboard from './pages/merchant/MerchantDashboard';
 import MerchantOrderDetail from './pages/merchant/MerchantOrderDetail';
 import MerchantMenu from './pages/merchant/MerchantMenu';
 import MerchantHistory from './pages/merchant/MerchantHistory';
+import AdminLogin from './pages/admin/AdminLogin';
 import AdminOrders from './pages/admin/AdminOrders';
 import AdminZones from './pages/admin/AdminZones';
 import AdminMerchants from './pages/admin/AdminMerchants';
@@ -62,37 +69,52 @@ function AdminLayout() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route element={<CustomerLayout />}>
-          <Route path="/" element={<MerchantList />} />
-          <Route path="/merchants/:id" element={<MerchantDetail />} />
-          <Route path="/checkout" element={<Checkout />} />
-          <Route path="/orders/:id" element={<OrderConfirmation />} />
-        </Route>
-        <Route element={<DriverLayout />}>
-          <Route path="/driver/login" element={<DriverLogin />} />
-          <Route path="/driver/dashboard" element={<DriverDashboard />} />
-          <Route path="/driver/orders/:id" element={<DriverOrderDetail />} />
-          <Route path="/driver/history" element={<DriverHistory />} />
-        </Route>
-        <Route element={<MerchantLayout />}>
-          <Route path="/merchant/login" element={<MerchantLogin />} />
-          <Route path="/merchant/dashboard" element={<MerchantDashboard />} />
-          <Route path="/merchant/orders/:id" element={<MerchantOrderDetail />} />
-          <Route path="/merchant/menu" element={<MerchantMenu />} />
-          <Route path="/merchant/history" element={<MerchantHistory />} />
-        </Route>
-        <Route element={<AdminLayout />}>
-          <Route path="/admin" element={<Navigate to="/admin/orders" replace />} />
-          <Route path="/admin/orders" element={<AdminOrders />} />
-          <Route path="/admin/zones" element={<AdminZones />} />
-          <Route path="/admin/merchants" element={<AdminMerchants />} />
-          <Route path="/admin/drivers" element={<AdminDrivers />} />
-          <Route path="/admin/reports" element={<AdminReports />} />
-          <Route path="/admin/support" element={<AdminSupport />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route element={<CustomerLayout />}>
+            <Route path="/" element={<MerchantList />} />
+            <Route path="/merchants/:id" element={<MerchantDetail />} />
+            <Route path="/login" element={<CustomerLogin />} />
+            <Route path="/register" element={<CustomerRegister />} />
+            <Route element={<RequireRole role="customer" />}>
+              <Route path="/checkout" element={<Checkout />} />
+              <Route path="/orders/:id" element={<OrderConfirmation />} />
+            </Route>
+          </Route>
+          <Route element={<DriverLayout />}>
+            <Route path="/driver/login" element={<DriverLogin />} />
+            <Route path="/driver/register" element={<DriverRegister />} />
+            <Route element={<RequireRole role="driver" />}>
+              <Route path="/driver/dashboard" element={<DriverDashboard />} />
+              <Route path="/driver/orders/:id" element={<DriverOrderDetail />} />
+              <Route path="/driver/history" element={<DriverHistory />} />
+            </Route>
+          </Route>
+          <Route element={<MerchantLayout />}>
+            <Route path="/merchant/login" element={<MerchantLogin />} />
+            <Route path="/merchant/register" element={<MerchantRegister />} />
+            <Route element={<RequireRole role="merchant" />}>
+              <Route path="/merchant/dashboard" element={<MerchantDashboard />} />
+              <Route path="/merchant/orders/:id" element={<MerchantOrderDetail />} />
+              <Route path="/merchant/menu" element={<MerchantMenu />} />
+              <Route path="/merchant/history" element={<MerchantHistory />} />
+            </Route>
+          </Route>
+          <Route element={<AdminLayout />}>
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route element={<RequireRole role="admin" />}>
+              <Route path="/admin" element={<Navigate to="/admin/orders" replace />} />
+              <Route path="/admin/orders" element={<AdminOrders />} />
+              <Route path="/admin/zones" element={<AdminZones />} />
+              <Route path="/admin/merchants" element={<AdminMerchants />} />
+              <Route path="/admin/drivers" element={<AdminDrivers />} />
+              <Route path="/admin/reports" element={<AdminReports />} />
+              <Route path="/admin/support" element={<AdminSupport />} />
+            </Route>
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }

@@ -2,11 +2,12 @@ import express from 'express';
 import { query } from '../config/db.js';
 import { writeLimiter } from '../middleware/rateLimit.js';
 import { sendSMS } from '../utils/sms.js';
+import { requireAuth, requireRole, requireSelfOrAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// GET all drivers (admin view)
-router.get('/', async (req, res, next) => {
+// GET all drivers — admin only (driver roster management)
+router.get('/', requireAuth, requireRole('admin'), async (req, res, next) => {
   try {
     const result = await query(
       `SELECT d.id, u.full_name, u.phone, d.availability_status, d.cooler_kit_status, d.total_deliveries, d.avg_rating
@@ -20,8 +21,8 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-// GET driver by ID
-router.get('/:id', async (req, res, next) => {
+// GET driver by ID — the driver themself, or an admin
+router.get('/:id', requireAuth, requireSelfOrAdmin('id', 'driver_id'), async (req, res, next) => {
   try {
     const result = await query(
       `SELECT d.*, u.email, u.phone, u.full_name
@@ -40,7 +41,7 @@ router.get('/:id', async (req, res, next) => {
 });
 
 // PATCH update driver availability
-router.patch('/:id/availability', writeLimiter, async (req, res, next) => {
+router.patch('/:id/availability', requireAuth, requireSelfOrAdmin('id', 'driver_id'), writeLimiter, async (req, res, next) => {
   try {
     const { availability_status } = req.body;
     const result = await query(
@@ -54,7 +55,7 @@ router.patch('/:id/availability', writeLimiter, async (req, res, next) => {
 });
 
 // PATCH confirm cooler kit
-router.patch('/:id/cooler-kit', writeLimiter, async (req, res, next) => {
+router.patch('/:id/cooler-kit', requireAuth, requireSelfOrAdmin('id', 'driver_id'), writeLimiter, async (req, res, next) => {
   try {
     const { cooler_kit_status } = req.body;
     const result = await query(
@@ -68,7 +69,7 @@ router.patch('/:id/cooler-kit', writeLimiter, async (req, res, next) => {
 });
 
 // GET orders available to be offered to this driver
-router.get('/:id/available-orders', async (req, res, next) => {
+router.get('/:id/available-orders', requireAuth, requireSelfOrAdmin('id', 'driver_id'), async (req, res, next) => {
   try {
     const driverResult = await query('SELECT cooler_kit_status FROM drivers WHERE id = $1', [req.params.id]);
     if (driverResult.rows.length === 0) {
@@ -101,7 +102,7 @@ router.get('/:id/available-orders', async (req, res, next) => {
 });
 
 // GET this driver's current active delivery, if any
-router.get('/:id/active-order', async (req, res, next) => {
+router.get('/:id/active-order', requireAuth, requireSelfOrAdmin('id', 'driver_id'), async (req, res, next) => {
   try {
     const result = await query(
       `SELECT o.*, m.business_name AS merchant_name, m.address AS merchant_address,
@@ -130,7 +131,7 @@ router.get('/:id/active-order', async (req, res, next) => {
 });
 
 // GET this driver's completed delivery history + earnings
-router.get('/:id/deliveries', async (req, res, next) => {
+router.get('/:id/deliveries', requireAuth, requireSelfOrAdmin('id', 'driver_id'), async (req, res, next) => {
   try {
     const deliveries = await query(
       `SELECT o.id, o.total, o.delivery_fee, o.tip, o.delivered_at, m.business_name AS merchant_name
@@ -151,7 +152,7 @@ router.get('/:id/deliveries', async (req, res, next) => {
 });
 
 // POST driver accepts an offered order
-router.post('/:id/accept-order/:orderId', writeLimiter, async (req, res, next) => {
+router.post('/:id/accept-order/:orderId', requireAuth, requireSelfOrAdmin('id', 'driver_id'), writeLimiter, async (req, res, next) => {
   try {
     const result = await query(
       `UPDATE orders SET driver_id = $1, updated_at = NOW()
@@ -171,7 +172,7 @@ router.post('/:id/accept-order/:orderId', writeLimiter, async (req, res, next) =
 });
 
 // POST driver declines an offered order (no persistence yet, ack only)
-router.post('/:id/decline-order/:orderId', writeLimiter, async (req, res, next) => {
+router.post('/:id/decline-order/:orderId', requireAuth, requireSelfOrAdmin('id', 'driver_id'), writeLimiter, async (req, res, next) => {
   res.json({ declined: true, order_id: Number(req.params.orderId) });
 });
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getActiveOrder, submitDeliveryProof, updateOrderStatus } from '../../api/client';
-import { useDriverSession } from '../../driver/useDriverSession';
+import { useAuth } from '../../auth/AuthContext';
 import type { DriverOrder } from '../../types';
 
 const COLD_CHAIN_LIMIT_MIN = 20;
@@ -20,7 +20,8 @@ function getCurrentPosition(): Promise<GeolocationPosition | null> {
 
 export default function DriverOrderDetail() {
   const { id } = useParams<{ id: string }>();
-  const { driverId } = useDriverSession();
+  const { auth } = useAuth();
+  const driverId = auth!.driverId!;
   const navigate = useNavigate();
 
   const [order, setOrder] = useState<DriverOrder | null>(null);
@@ -31,10 +32,6 @@ export default function DriverOrderDetail() {
   const [elapsedMin, setElapsedMin] = useState(0);
 
   useEffect(() => {
-    if (!driverId) {
-      navigate('/driver/login');
-      return;
-    }
     getActiveOrder(driverId).then((active) => {
       if (!active || String(active.id) !== id) {
         navigate('/driver/dashboard');

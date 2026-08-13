@@ -8,3 +8,7 @@ export const STRIPE_CONFIGURED = stripeKey.startsWith('pk_') && stripeKey !== 'p
 const mapsKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 export const GOOGLE_MAPS_API_KEY = mapsKey;
 export const GOOGLE_MAPS_CONFIGURED = mapsKey.length > 10 && mapsKey !== 'your_google_maps_key_here';
+
+const sentryDsn = import.meta.env.VITE_SENTRY_DSN || '';
+export const SENTRY_DSN = sentryDsn;
+export const SENTRY_CONFIGURED = sentryDsn.length > 10 && sentryDsn !== 'your_sentry_dsn_here';

@@ -31,3 +31,9 @@ services:
         sync: false
       - key: TWILIO_PHONE_NUMBER
         sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RECEIPT_FROM_EMAIL
+        sync: false
+      - key: SENTRY_DSN
+        sync: false

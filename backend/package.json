@@ -15,6 +15,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@sentry/node": "^10.70.0",
     "axios": "^1.4.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
@@ -24,6 +25,7 @@
     "helmet": "^7.0.0",
     "jsonwebtoken": "^9.0.0",
     "pg": "^8.8.0",
+    "resend": "^6.19.0",
     "stripe": "^12.0.0",
     "twilio": "^6.1.0",
     "zod": "^4.4.3"

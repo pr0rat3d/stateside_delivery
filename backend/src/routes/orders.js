@@ -4,6 +4,7 @@ import { writeLimiter } from '../middleware/rateLimit.js';
 import { validateBody } from '../middleware/validate.js';
 import { createOrderSchema } from '../utils/schemas.js';
 import { sendSMS } from '../utils/sms.js';
+import { sendEmail, renderOrderReceiptEmail } from '../utils/email.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -140,6 +141,16 @@ router.post('/', requireAuth, requireRole('customer'), writeLimiter, validateBod
          VALUES ($1, $2, $3, $4, $5)`,
         [order_id, item.menu_item_id, item.name, item.quantity, item.price_per_unit]
       );
+    }
+
+    const customerEmailResult = await query(
+      `SELECT u.email FROM customers c JOIN users u ON c.user_id = u.id WHERE c.id = $1`,
+      [customer_id]
+    );
+    const customerEmail = customerEmailResult.rows[0]?.email;
+    if (customerEmail) {
+      const { subject, html } = renderOrderReceiptEmail(orderResult.rows[0], pricedItems);
+      sendEmail(customerEmail, subject, html);
     }
 
     res.status(201).json(orderResult.rows[0]);

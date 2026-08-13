@@ -1,7 +1,11 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
+import { sentryConfigured, Sentry } from './config/sentry.js';
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import dotenv from 'dotenv';
 import { connectDB } from './config/db.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/logging.js';
@@ -19,8 +23,6 @@ import paymentRoutes, { stripeWebhookHandler } from './routes/payments.js';
 import supportRoutes from './routes/support.js';
 import mapsRoutes from './routes/maps.js';
 import authRoutes from './routes/auth.js';
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -67,6 +69,10 @@ app.use('/api/auth', authRoutes);
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
+
+if (sentryConfigured) {
+  Sentry.setupExpressErrorHandler(app);
+}
 
 // Error handler (last middleware)
 app.use(errorHandler);

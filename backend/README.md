@@ -105,6 +105,30 @@ restart the server.
 6. Trial accounts can only text verified numbers — verify your test phone number in the
    Twilio Console before testing
 
+### Resend (real receipt emails)
+
+1. Create a free account at https://resend.com/signup (100 emails/day, 3,000/month, no
+   credit card required)
+2. Copy the API key from the dashboard (**API Keys**) and set `RESEND_API_KEY` (backend
+   `.env`)
+3. Without a verified domain, Resend only lets the sandbox sender
+   (`onboarding@resend.dev`) deliver to the email address you signed up with — fine for
+   testing, but to send receipts to arbitrary customers you'll need to verify a domain
+   under **Domains** and set `RECEIPT_FROM_EMAIL` to an address on it (e.g.
+   `Stateside Deliveries <receipts@yourdomain.com>`)
+4. Restart the backend — placing an order will send a real itemized receipt instead of
+   logging `[Email mock] ...` to the console
+
+### Sentry (error + performance monitoring)
+
+1. Create a free account at https://sentry.io/signup (Developer tier is free)
+2. Create two projects: one **Node.js/Express** (backend), one **React** (frontend)
+3. Each project's setup page shows a DSN (`https://...@....ingest.sentry.io/...`) — set
+   `SENTRY_DSN` (backend `.env`) and `VITE_SENTRY_DSN` (frontend `.env`) respectively
+4. Restart both — unhandled errors and a sample of request/page-load traces will start
+   showing up in the Sentry dashboard instead of only the console. Without a DSN set,
+   both SDKs are inert (no-op), so nothing changes locally until you add one
+
 ## Authentication
 
 Every role (customer, driver, merchant, admin) has a real account with a bcrypt-hashed
@@ -130,6 +154,32 @@ an extra DB lookup.
 **Test credentials** (after `npm run seed`), password `password123` for all:
 `fruitbowl@test.com` / `costless@test.com` (merchant), `guest@test.com` (customer),
 `driver@test.com` (driver), `admin@test.com` (admin).
+
+## Staging environment & CI
+
+`.github/workflows/ci.yml` (repo root) runs on every push/PR to `main` or `staging`:
+- **frontend job**: `npm ci`, lint (`oxlint`), and `tsc -b && vite build` — catches type
+  errors and build breakage before merge
+- **backend job**: spins up a throwaway Postgres, applies all `migrations/*.sql` in
+  order, runs the seed script against it, then boots the server and hits
+  `/api/health` — catches broken migrations or a server that fails to start
+
+This is a merge gate, not a deploy step — Render and Vercel handle actual deploys (see
+below), triggered independently by pushes to their configured branch.
+
+To stand up a staging environment alongside production:
+
+1. **Neon**: open the project → **Branches** → **Create branch** off `main` (branching
+   copies the schema + data instantly, no re-seeding needed). Copy that branch's
+   connection string.
+2. **Render**: **New +** → **Web Service** (not Blueprint this time, since Blueprint is
+   already bound to the prod service) → same repo, but set **Branch** to `staging` and
+   **Root Directory** to `backend`. Add the same env vars as prod, but point
+   `DATABASE_URL` at the Neon staging branch from step 1, and set `CORS_ORIGIN` to the
+   Vercel staging URL from step 3.
+3. **Vercel**: no action needed — Vercel already auto-deploys a unique preview URL for
+   every branch/PR that isn't `main` (visible in the project's **Deployments** tab, or
+   `vercel ls`). Push to `staging` and use that preview URL as the frontend staging site.
 
 ## Security notes
 
